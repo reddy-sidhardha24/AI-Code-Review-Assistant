@@ -1,0 +1,20 @@
+{
+    "project_name": "regressio",
+    "total_files": 1,
+    "total_lines": 233,
+    "languages": {
+        "Python": {
+            "files": 1,
+            "lines": 233
+        }
+    },
+    "files": [
+        {
+            "name": "regressio.py",
+            "path": "regressio.py",
+            "extension": ".py",
+            "language": "Python",
+            "lines": 233
+        }
+    ]
+}
