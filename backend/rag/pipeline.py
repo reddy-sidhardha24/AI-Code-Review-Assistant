@@ -2,6 +2,7 @@
 
 import os
 import json
+from typing import Dict, List
 
 from .loader import ProjectLoader
 from .chunker import CodeChunker
@@ -13,22 +14,60 @@ from .prompt_builder import PromptBuilder
 
 class RAGPipeline:
     """
-    Complete RAG Pipeline
+    RAG Pipeline
 
-    Project Loader
-            ↓
-    Project Metadata
-            ↓
+    Project
+        ↓
+    Loader
+        ↓
+    Metadata
+        ↓
     Chunker
-            ↓
+        ↓
     Embedder
-            ↓
-    Vector Store (FAISS)
-            ↓
-    Retriever
-            ↓
+        ↓
+    FAISS Vector Store
+        ↓
+    Query Classification
+        ↓
+    ┌────────────────┬─────────────────┐
+    │ Targeted       │ Project-wide    │
+    │ Retrieval      │ Retrieval       │
+    └────────────────┴─────────────────┘
+        ↓
     Prompt Builder
     """
+
+    # ==================================================
+    # Broad-query phrases
+    # ==================================================
+
+    PROJECT_WIDE_PHRASES = (
+        "complete analysis",
+        "complete review",
+        "full analysis",
+        "full review",
+        "entire project",
+        "whole project",
+        "complete project",
+        "entire codebase",
+        "whole codebase",
+        "all files",
+        "every file",
+        "all bugs",
+        "all errors",
+        "find all bugs",
+        "find all errors",
+        "analyze project",
+        "analyse project",
+        "analyze the project",
+        "analyse the project",
+        "review project",
+        "review the project",
+        "analyze everything",
+        "analyse everything",
+        "review everything",
+    )
 
     def __init__(self):
 
@@ -44,29 +83,39 @@ class RAGPipeline:
 
         self.prompt_builder = PromptBuilder()
 
-        # Store project-wide metadata
         self.project_metadata = None
 
-        # Retriever will be initialized only if
-        # an existing vector database is available.
         self.retriever = None
+
+        # ----------------------------------------------
+        # Load existing database if available
+        # ----------------------------------------------
 
         if self.vector_database_exists():
 
-            print("Existing vector database found.")
+            print(
+                "Existing vector database found."
+            )
 
             try:
+
                 self.retriever = Retriever()
 
-                print("Retriever loaded successfully.")
+                print(
+                    "Retriever loaded successfully."
+                )
 
             except Exception as e:
 
                 print(
-                    f"Could not initialize retriever: {e}"
+                    "Could not initialize retriever:",
+                    str(e)
                 )
 
-        # Load existing project metadata if available
+        # ----------------------------------------------
+        # Load existing metadata
+        # ----------------------------------------------
+
         self.load_project_metadata()
 
         print("\nRAG Pipeline Ready.\n")
@@ -75,23 +124,28 @@ class RAGPipeline:
     # Build Vector Database
     # ==================================================
 
-    def build_vector_database(self, project_path):
+    def build_vector_database(
+        self,
+        project_path: str
+    ):
 
         print("\nLoading project...")
 
         # ----------------------------------------------
-        # Load project
+        # Load source files
         # ----------------------------------------------
 
-        self.loader = ProjectLoader(project_path)
+        self.loader = ProjectLoader(
+            project_path
+        )
 
         documents = self.loader.load()
 
         if not documents:
 
             raise ValueError(
-                "No supported source-code files were found "
-                "inside the uploaded project."
+                "No supported source-code files "
+                "were found inside the uploaded project."
             )
 
         print(
@@ -99,7 +153,7 @@ class RAGPipeline:
         )
 
         # ----------------------------------------------
-        # Get project metadata
+        # Project metadata
         # ----------------------------------------------
 
         self.project_metadata = (
@@ -109,26 +163,39 @@ class RAGPipeline:
         print("\nProject Metadata:")
 
         print(
-            f"Project Name : "
-            f"{self.project_metadata['project_name']}"
+            "Project Name :",
+            self.project_metadata.get(
+                "project_name",
+                "Unknown"
+            )
         )
 
         print(
-            f"Total Files  : "
-            f"{self.project_metadata['total_files']}"
+            "Total Files  :",
+            self.project_metadata.get(
+                "total_files",
+                0
+            )
         )
 
         print(
-            f"Total Lines  : "
-            f"{self.project_metadata['total_lines']}"
+            "Total Lines  :",
+            self.project_metadata.get(
+                "total_lines",
+                0
+            )
         )
 
         print(
-            f"Languages    : "
-            f"{list(self.project_metadata['languages'].keys())}"
+            "Languages    :",
+            list(
+                self.project_metadata.get(
+                    "languages",
+                    {}
+                ).keys()
+            )
         )
 
-        # Save metadata separately
         self.save_project_metadata()
 
         # ----------------------------------------------
@@ -137,14 +204,16 @@ class RAGPipeline:
 
         print("\nChunking...")
 
-        chunks = self.chunker.chunk_documents(
-            documents
+        chunks = (
+            self.chunker.chunk_documents(
+                documents
+            )
         )
 
         if not chunks:
 
             raise ValueError(
-                "No code chunks were generated."
+                "No source-code chunks were generated."
             )
 
         print(
@@ -155,21 +224,29 @@ class RAGPipeline:
         # Generate embeddings
         # ----------------------------------------------
 
-        print("\nGenerating embeddings...")
-
-        embedded_chunks = (
-            self.embedder.embed_chunks(chunks)
+        print(
+            "\nGenerating embeddings..."
         )
 
+        embedded_chunks = (
+            self.embedder.embed_chunks(
+                chunks
+            )
+        )
+
+        if not embedded_chunks:
+
+            raise ValueError(
+                "No embeddings were generated."
+            )
+
         # ----------------------------------------------
-        # IMPORTANT:
-        # Create a NEW vector store for every project.
-        #
-        # Otherwise uploading project B after project A
-        # could leave project A vectors in memory.
+        # Fresh vector store
         # ----------------------------------------------
 
-        print("\nCreating FAISS index...")
+        print(
+            "\nCreating new FAISS index..."
+        )
 
         self.vector_store = VectorStore()
 
@@ -184,15 +261,11 @@ class RAGPipeline:
         )
 
         # ----------------------------------------------
-        # IMPORTANT:
-        # Reload retriever after rebuilding FAISS.
-        #
-        # The old Retriever may still contain the
-        # previous project's index in memory.
+        # Reload retriever
         # ----------------------------------------------
 
         print(
-            "\nReloading retriever with new project..."
+            "\nReloading retriever..."
         )
 
         self.retriever = Retriever()
@@ -201,17 +274,203 @@ class RAGPipeline:
             "Retriever updated successfully."
         )
 
+        # ----------------------------------------------
+        # Retrieval statistics
+        # ----------------------------------------------
+
+        statistics = (
+            self.retriever
+            .get_retrieval_statistics()
+        )
+
+        print("\nRetrieval Statistics:")
+
+        print(
+            "Indexed Files :",
+            statistics[
+                "total_indexed_files"
+            ]
+        )
+
+        print(
+            "Total Chunks  :",
+            statistics[
+                "total_chunks"
+            ]
+        )
+
         return self.project_metadata
 
     # ==================================================
-    # Generate RAG Prompt
+    # Query Classification
+    # ==================================================
+
+    def classify_query(
+        self,
+        query: str
+    ) -> str:
+        """
+        Decide whether the user is asking about:
+
+        TARGETED
+        --------
+        A particular function, class, file, bug,
+        feature, or behavior.
+
+        PROJECT_WIDE
+        ------------
+        The complete project/codebase or all
+        bugs/errors/files.
+
+        Returns:
+
+        "targeted"
+        or
+        "project_wide"
+        """
+
+        normalized_query = (
+            query
+            .strip()
+            .lower()
+        )
+
+        # ----------------------------------------------
+        # Explicit broad phrases
+        # ----------------------------------------------
+
+        for phrase in (
+            self.PROJECT_WIDE_PHRASES
+        ):
+
+            if phrase in normalized_query:
+
+                return "project_wide"
+
+        # ----------------------------------------------
+        # Multiple broad review categories
+        # ----------------------------------------------
+
+        broad_categories = (
+            "bugs",
+            "errors",
+            "security",
+            "performance",
+            "quality",
+            "architecture",
+            "methods",
+            "classes",
+            "libraries",
+            "output",
+            "improvements",
+        )
+
+        category_count = sum(
+            1
+            for category
+            in broad_categories
+            if category
+            in normalized_query
+        )
+
+        # Example:
+        #
+        # "Give bugs, errors, performance,
+        # security and improvements"
+        #
+        # This strongly suggests broad analysis.
+
+        if category_count >= 4:
+
+            return "project_wide"
+
+        return "targeted"
+
+    # ==================================================
+    # Retrieve Context
+    # ==================================================
+
+    def retrieve_context(
+        self,
+        query: str,
+        targeted_top_k: int = 3,
+        project_max_chunks: int = 8,
+        chunks_per_file: int = 2
+    ) -> Dict:
+        """
+        Select retrieval strategy automatically.
+        """
+
+        if self.retriever is None:
+
+            self.retriever = Retriever()
+
+        query_type = (
+            self.classify_query(
+                query
+            )
+        )
+
+        print(
+            f"\nQuery Type: {query_type}"
+        )
+
+        # ----------------------------------------------
+        # Project-wide retrieval
+        # ----------------------------------------------
+
+        if query_type == "project_wide":
+
+            print(
+                "Using broad project retrieval..."
+            )
+
+            chunks = (
+                self.retriever
+                .retrieve_project_wide(
+                    query=query,
+                    max_chunks=project_max_chunks,
+                    chunks_per_file=chunks_per_file
+                )
+            )
+
+        # ----------------------------------------------
+        # Targeted semantic retrieval
+        # ----------------------------------------------
+
+        else:
+
+            print(
+                "Using targeted semantic retrieval..."
+            )
+
+            chunks = (
+                self.retriever.retrieve(
+                    query=query,
+                    top_k=targeted_top_k
+                )
+            )
+
+        return {
+            "query_type": query_type,
+            "chunks": chunks
+        }
+
+    # ==================================================
+    # Generate Prompt
     # ==================================================
 
     def generate_prompt(
         self,
-        query,
-        top_k=5
+        query: str,
+        targeted_top_k: int = 3,
+        project_max_chunks: int = 8,
+        chunks_per_file: int = 2
     ):
+
+        # ----------------------------------------------
+        # Validate query
+        # ----------------------------------------------
 
         if not query or not query.strip():
 
@@ -219,8 +478,10 @@ class RAGPipeline:
                 "Question cannot be empty."
             )
 
+        query = query.strip()
+
         # ----------------------------------------------
-        # Make sure vector database exists
+        # Check database
         # ----------------------------------------------
 
         if not self.vector_database_exists():
@@ -231,7 +492,7 @@ class RAGPipeline:
             )
 
         # ----------------------------------------------
-        # Initialize retriever if necessary
+        # Initialize retriever
         # ----------------------------------------------
 
         if self.retriever is None:
@@ -243,22 +504,32 @@ class RAGPipeline:
             self.retriever = Retriever()
 
         # ----------------------------------------------
-        # Retrieve relevant code
+        # Retrieve context
         # ----------------------------------------------
 
         print(
-            "\nRetrieving relevant code...\n"
+            "\nRetrieving relevant code..."
         )
 
-        retrieved_chunks = (
-            self.retriever.retrieve(
+        retrieval = (
+            self.retrieve_context(
                 query=query,
-                top_k=top_k
+                targeted_top_k=targeted_top_k,
+                project_max_chunks=project_max_chunks,
+                chunks_per_file=chunks_per_file
             )
         )
 
+        query_type = (
+            retrieval["query_type"]
+        )
+
+        retrieved_chunks = (
+            retrieval["chunks"]
+        )
+
         print(
-            f"Retrieved "
+            f"\nRetrieved "
             f"{len(retrieved_chunks)} chunks."
         )
 
@@ -266,38 +537,12 @@ class RAGPipeline:
         # Debug retrieved chunks
         # ----------------------------------------------
 
-        for i, chunk in enumerate(
-            retrieved_chunks,
-            start=1
-        ):
-
-            print(
-                f"\nRetrieved Chunk {i}:"
-            )
-
-            print(
-                f"File: "
-                f"{chunk.get('name', 'Unknown')}"
-            )
-
-            print(
-                f"Path: "
-                f"{chunk.get('path', 'Unknown')}"
-            )
-
-            print(
-                f"Lines: "
-                f"{chunk.get('start_line', '?')} - "
-                f"{chunk.get('end_line', '?')}"
-            )
-
-            print(
-                f"Distance: "
-                f"{chunk.get('distance', '?')}"
-            )
+        self.print_retrieved_chunks(
+            retrieved_chunks
+        )
 
         # ----------------------------------------------
-        # Load metadata if necessary
+        # Load project metadata
         # ----------------------------------------------
 
         if self.project_metadata is None:
@@ -316,7 +561,82 @@ class RAGPipeline:
             )
         )
 
+        print(
+            f"\nPrompt generated using "
+            f"{query_type} retrieval."
+        )
+
         return prompt
+
+    # ==================================================
+    # Debug Retrieved Chunks
+    # ==================================================
+
+    def print_retrieved_chunks(
+        self,
+        retrieved_chunks: List[Dict]
+    ):
+
+        if not retrieved_chunks:
+
+            print(
+                "\nNo chunks retrieved."
+            )
+
+            return
+
+        for i, chunk in enumerate(
+            retrieved_chunks,
+            start=1
+        ):
+
+            print(
+                f"\nRetrieved Chunk {i}:"
+            )
+
+            print(
+                "File:",
+                chunk.get(
+                    "name",
+                    "Unknown"
+                )
+            )
+
+            print(
+                "Path:",
+                chunk.get(
+                    "path",
+                    "Unknown"
+                )
+            )
+
+            print(
+                "Language:",
+                chunk.get(
+                    "language",
+                    "Unknown"
+                )
+            )
+
+            print(
+                "Lines:",
+                f"{chunk.get('start_line', '?')} - "
+                f"{chunk.get('end_line', '?')}"
+            )
+
+            # Project-wide retrieval can contain
+            # metadata chunks without a distance.
+
+            distance = chunk.get(
+                "distance"
+            )
+
+            if distance is not None:
+
+                print(
+                    "Distance:",
+                    distance
+                )
 
     # ==================================================
     # Save Project Metadata
@@ -324,16 +644,26 @@ class RAGPipeline:
 
     def save_project_metadata(
         self,
-        metadata_path="vector_db/project_metadata.json"
+        metadata_path=(
+            "vector_db/"
+            "project_metadata.json"
+        )
     ):
 
         if self.project_metadata is None:
+
             return
 
-        os.makedirs(
-            os.path.dirname(metadata_path),
-            exist_ok=True
+        directory = os.path.dirname(
+            metadata_path
         )
+
+        if directory:
+
+            os.makedirs(
+                directory,
+                exist_ok=True
+            )
 
         with open(
             metadata_path,
@@ -357,10 +687,15 @@ class RAGPipeline:
 
     def load_project_metadata(
         self,
-        metadata_path="vector_db/project_metadata.json"
+        metadata_path=(
+            "vector_db/"
+            "project_metadata.json"
+        )
     ):
 
-        if not os.path.exists(metadata_path):
+        if not os.path.exists(
+            metadata_path
+        ):
 
             self.project_metadata = None
 
@@ -375,7 +710,9 @@ class RAGPipeline:
             ) as file:
 
                 self.project_metadata = (
-                    json.load(file)
+                    json.load(
+                        file
+                    )
                 )
 
             print(
@@ -384,10 +721,15 @@ class RAGPipeline:
 
             return self.project_metadata
 
-        except Exception as e:
+        except (
+            OSError,
+            json.JSONDecodeError
+        ) as e:
 
             print(
-                f"Could not load project metadata: {e}"
+                "Could not load "
+                "project metadata:",
+                str(e)
             )
 
             self.project_metadata = None
@@ -395,10 +737,12 @@ class RAGPipeline:
             return None
 
     # ==================================================
-    # Check Vector Database
+    # Vector Database Exists
     # ==================================================
 
-    def vector_database_exists(self):
+    def vector_database_exists(
+        self
+    ) -> bool:
 
         return (
             os.path.exists(
@@ -414,7 +758,9 @@ class RAGPipeline:
     # Get Project Metadata
     # ==================================================
 
-    def get_project_metadata(self):
+    def get_project_metadata(
+        self
+    ):
 
         if self.project_metadata is None:
 
@@ -422,10 +768,35 @@ class RAGPipeline:
 
         return self.project_metadata
 
+    # ==================================================
+    # Get Retrieval Statistics
+    # ==================================================
 
-# ======================================================
-# Test Pipeline
-# ======================================================
+    def get_retrieval_statistics(
+        self
+    ):
+
+        if self.retriever is None:
+
+            if not self.vector_database_exists():
+
+                return {
+                    "total_chunks": 0,
+                    "total_indexed_files": 0,
+                    "chunks_per_file": {}
+                }
+
+            self.retriever = Retriever()
+
+        return (
+            self.retriever
+            .get_retrieval_statistics()
+        )
+
+
+# ============================================================
+# Local Test
+# ============================================================
 
 if __name__ == "__main__":
 
@@ -438,15 +809,13 @@ if __name__ == "__main__":
         )
 
         print(
-            "Building vector database..."
+            "Build/upload a project first."
         )
-
-        rag.build_vector_database("../")
 
     else:
 
         print(
-            "Vector database already exists."
+            "Vector database found."
         )
 
         metadata = (
@@ -455,7 +824,9 @@ if __name__ == "__main__":
 
         if metadata:
 
-            print("\nProject Information:")
+            print(
+                "\nProject Information"
+            )
 
             print(
                 "Project:",
@@ -480,31 +851,86 @@ if __name__ == "__main__":
 
             print(
                 "Languages:",
-                metadata.get(
-                    "languages"
+                list(
+                    metadata.get(
+                        "languages",
+                        {}
+                    ).keys()
                 )
             )
 
-    while True:
+        statistics = (
+            rag.get_retrieval_statistics()
+        )
+
+        print(
+            "\nRetrieval Statistics"
+        )
+
+        print(
+            "Chunks:",
+            statistics[
+                "total_chunks"
+            ]
+        )
+
+        print(
+            "Indexed Files:",
+            statistics[
+                "total_indexed_files"
+            ]
+        )
+
+    # --------------------------------------------------------
+    # Interactive testing
+    # --------------------------------------------------------
+
+    while rag.vector_database_exists():
 
         question = input(
             "\nAsk Question "
             "(type 'exit' to quit): "
         )
 
-        if question.lower() == "exit":
+        if (
+            question
+            .strip()
+            .lower()
+            == "exit"
+        ):
+
             break
 
-        prompt = rag.generate_prompt(
-            question
-        )
+        try:
 
-        print(
-            "\n" + "=" * 80
-        )
+            print(
+                "\nClassification:",
+                rag.classify_query(
+                    question
+                )
+            )
 
-        print(prompt)
+            prompt = (
+                rag.generate_prompt(
+                    question
+                )
+            )
 
-        print(
-            "=" * 80
-        )
+            print(
+                "\nPrompt generated successfully."
+            )
+
+            # Do not print the entire prompt during normal
+            # testing because it may be very large.
+
+            print(
+                "Prompt characters:",
+                len(prompt)
+            )
+
+        except Exception as e:
+
+            print(
+                "Error:",
+                str(e)
+            )

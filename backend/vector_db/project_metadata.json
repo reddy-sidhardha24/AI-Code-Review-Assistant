@@ -1,20 +1,20 @@
 {
-    "project_name": "regressio",
+    "project_name": "prog2",
     "total_files": 1,
-    "total_lines": 233,
+    "total_lines": 444,
     "languages": {
-        "Python": {
+        "JavaScript": {
             "files": 1,
-            "lines": 233
+            "lines": 444
         }
     },
     "files": [
         {
-            "name": "regressio.py",
-            "path": "regressio.py",
-            "extension": ".py",
-            "language": "Python",
-            "lines": 233
+            "name": "AdminDashboard.jsx",
+            "path": "AdminDashboard.jsx",
+            "extension": ".jsx",
+            "language": "JavaScript",
+            "lines": 444
         }
     ]
 }
