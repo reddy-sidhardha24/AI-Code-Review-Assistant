@@ -2,8 +2,7 @@
 
 import os
 import json
-import shutil
-import zipfile
+
 from pathlib import Path
 from typing import List, Optional, Literal
 
@@ -16,6 +15,7 @@ from fastapi import (
     File
 )
 
+
 from fastapi.middleware.cors import CORSMiddleware
 
 from pydantic import (
@@ -27,7 +27,13 @@ from pydantic import (
 from groq import Groq
 
 from rag.pipeline import RAGPipeline
-
+from uploads.upload_service import UploadService
+from services.review_service import ReviewService
+from models.review_models import (
+    ReviewRequest,
+    StructuredReview,
+    
+)
 
 # ============================================================
 # Environment Variables
@@ -58,6 +64,37 @@ client = Groq(
 
 rag_pipeline = RAGPipeline()
 
+# ============================================================
+# Directories
+# ============================================================
+
+UPLOAD_DIR = Path("uploads")
+
+UPLOAD_DIR.mkdir(
+    parents=True,
+    exist_ok=True
+)
+
+
+EXTRACT_DIR = Path("extracted")
+
+EXTRACT_DIR.mkdir(
+    parents=True,
+    exist_ok=True
+)
+
+upload_service = UploadService(
+    upload_dir=UPLOAD_DIR,
+    extract_dir=EXTRACT_DIR,
+    rag_pipeline=rag_pipeline
+)
+
+
+review_service = ReviewService(
+    rag_pipeline=rag_pipeline,
+    groq_client=client
+)
+
 
 # ============================================================
 # FastAPI Application
@@ -81,290 +118,15 @@ app.add_middleware(
     allow_headers=["*"]
 )
 
-
 # ============================================================
-# Directories
-# ============================================================
-
-UPLOAD_DIR = Path("uploads")
-
-UPLOAD_DIR.mkdir(
-    parents=True,
-    exist_ok=True
-)
-
-
-EXTRACT_DIR = Path("extracted")
-
-EXTRACT_DIR.mkdir(
-    parents=True,
-    exist_ok=True
-)
-
-
-# ============================================================
-# Request Model
+# Paste Code Request
 # ============================================================
 
-class ReviewRequest(BaseModel):
+class PasteCodeRequest(BaseModel):
 
-    question: str = Field(
-        min_length=1,
-        max_length=2000
-    )
+    filename: str
 
-
-# ============================================================
-# Project Information
-# ============================================================
-
-class ProjectInfo(BaseModel):
-
-    name: Optional[str] = None
-
-    languages: List[str] = Field(
-        default_factory=list
-    )
-
-    total_files: int = Field(
-        default=0,
-        ge=0
-    )
-
-    total_lines: int = Field(
-        default=0,
-        ge=0
-    )
-
-
-# ============================================================
-# File Analyzed
-# ============================================================
-
-class FileAnalyzed(BaseModel):
-
-    file_name: str
-
-    path: str
-
-    language: str
-
-
-# ============================================================
-# Bug Finding
-# ============================================================
-
-class BugFinding(BaseModel):
-
-    title: str
-
-    type: Literal[
-        "confirmed",
-        "conditional",
-        "possible_risk"
-    ]
-
-    severity: Literal[
-        "critical",
-        "high",
-        "medium",
-        "low"
-    ]
-
-    file: str
-
-    line: Optional[int] = None
-
-    line_range: Optional[str] = None
-
-    evidence: str
-
-    description: str
-
-    impact: str
-
-    fix: str
-
-    confidence: int = Field(
-        default=0,
-        ge=0,
-        le=100
-    )
-
-
-# ============================================================
-# Error Finding
-# ============================================================
-
-class ErrorFinding(BaseModel):
-
-    type: str
-
-    title: str
-
-    file: str
-
-    line: Optional[int] = None
-
-    line_range: Optional[str] = None
-
-    evidence: str = ""
-
-    description: str
-
-    impact: str = ""
-
-    fix: str
-
-    confidence: int = Field(
-        default=0,
-        ge=0,
-        le=100
-    )
-
-
-# ============================================================
-# Performance
-# ============================================================
-
-class PerformanceIssue(BaseModel):
-
-    title: str = ""
-
-    description: str = ""
-
-    file: str = ""
-
-    line: Optional[int] = None
-
-    line_range: Optional[str] = None
-
-    evidence: str = ""
-
-    impact: str = ""
-
-    suggestion: str = ""
-
-    confidence: int = Field(
-        default=0,
-        ge=0,
-        le=100
-    )
-
-
-class PerformanceInfo(BaseModel):
-
-    time_complexity: str = ""
-
-    space_complexity: str = ""
-
-    issues: List[PerformanceIssue] = Field(
-        default_factory=list
-    )
-
-
-# ============================================================
-# Security
-# ============================================================
-
-class SecurityInfo(BaseModel):
-
-    issues_found: int = Field(
-        default=0,
-        ge=0
-    )
-
-    issues: List[str] = Field(
-        default_factory=list
-    )
-
-
-# ============================================================
-# Code Quality
-# ============================================================
-
-class CodeQualityInfo(BaseModel):
-
-    observations: List[str] = Field(
-        default_factory=list
-    )
-
-    suggestions: List[str] = Field(
-        default_factory=list
-    )
-
-
-# ============================================================
-# Structured Review
-# ============================================================
-
-class StructuredReview(BaseModel):
-
-    project: ProjectInfo
-
-    question: str
-
-    # New field from dynamic PromptBuilder
-    review_types: List[str] = Field(
-        default_factory=list
-    )
-
-    answer_summary: str = ""
-
-    files_analyzed: List[FileAnalyzed] = Field(
-        default_factory=list
-    )
-
-    bugs: List[BugFinding] = Field(
-        default_factory=list
-    )
-
-    errors: List[ErrorFinding] = Field(
-        default_factory=list
-    )
-
-    # --------------------------------------------------------
-    # These are now Optional.
-    #
-    # Explanation-only questions should NOT be forced to
-    # generate meaningless performance/security sections.
-    # --------------------------------------------------------
-
-    performance: Optional[
-        PerformanceInfo
-    ] = None
-
-    security: Optional[
-        SecurityInfo
-    ] = None
-
-    code_quality: Optional[
-        CodeQualityInfo
-    ] = None
-
-    key_methods: List[str] = Field(
-        default_factory=list
-    )
-
-    key_classes: List[str] = Field(
-        default_factory=list
-    )
-
-    libraries: List[str] = Field(
-        default_factory=list
-    )
-
-    expected_output: Optional[str] = None
-
-    score: Optional[float] = None
-
-    confidence: int = Field(
-        default=0,
-        ge=0,
-        le=100
-    )
-
-    final_verdict: str = ""
+    code: str
 
 
 # ============================================================
@@ -521,211 +283,66 @@ def project_info():
 # Upload Project API
 # ============================================================
 
-@app.post("/upload-project")
-async def upload_project(
-    file: UploadFile = File(...)
+
+
+@app.post("/upload-files")
+async def upload_files(
+    files: List[UploadFile] = File(...)
 ):
-
-    zip_path = None
-
     try:
 
-        # ----------------------------------------------------
-        # Validate Filename
-        # ----------------------------------------------------
-
-        if not file.filename:
-
-            raise HTTPException(
-                status_code=400,
-                detail="Invalid file."
-            )
-
-        # ----------------------------------------------------
-        # Validate Extension
-        # ----------------------------------------------------
-
-        if not file.filename.lower().endswith(
-            ".zip"
-        ):
-
-            raise HTTPException(
-                status_code=400,
-                detail="Please upload a ZIP file."
-            )
-
-        # ----------------------------------------------------
-        # Safe Filename
-        # ----------------------------------------------------
-
-        safe_filename = Path(
-            file.filename
-        ).name
-
-        zip_path = (
-            UPLOAD_DIR /
-            safe_filename
+        return await upload_service.process_multiple_files(
+            files
         )
-
-        # ----------------------------------------------------
-        # Save ZIP
-        # ----------------------------------------------------
-
-        with open(
-            zip_path,
-            "wb"
-        ) as buffer:
-
-            shutil.copyfileobj(
-                file.file,
-                buffer
-            )
-
-        # ----------------------------------------------------
-        # Validate ZIP
-        # ----------------------------------------------------
-
-        if not zipfile.is_zipfile(
-            zip_path
-        ):
-
-            zip_path.unlink(
-                missing_ok=True
-            )
-
-            raise HTTPException(
-                status_code=400,
-                detail=(
-                    "Uploaded file is not "
-                    "a valid ZIP archive."
-                )
-            )
-
-        # ----------------------------------------------------
-        # Project Name
-        # ----------------------------------------------------
-
-        project_name = Path(
-            safe_filename
-        ).stem
-
-        project_folder = (
-            EXTRACT_DIR /
-            project_name
-        )
-
-        # ----------------------------------------------------
-        # Remove Existing Extraction
-        # ----------------------------------------------------
-
-        if project_folder.exists():
-
-            shutil.rmtree(
-                project_folder
-            )
-
-        project_folder.mkdir(
-            parents=True,
-            exist_ok=True
-        )
-
-        # ----------------------------------------------------
-        # Safe ZIP Extraction
-        # ----------------------------------------------------
-
-        with zipfile.ZipFile(
-            zip_path,
-            "r"
-        ) as zip_ref:
-
-            extraction_root = (
-                project_folder.resolve()
-            )
-
-            for member in zip_ref.infolist():
-
-                target_path = (
-                    project_folder /
-                    member.filename
-                ).resolve()
-
-                try:
-
-                    target_path.relative_to(
-                        extraction_root
-                    )
-
-                except ValueError:
-
-                    raise HTTPException(
-                        status_code=400,
-                        detail=(
-                            "Unsafe file path detected "
-                            "inside ZIP archive."
-                        )
-                    )
-
-            zip_ref.extractall(
-                project_folder
-            )
-
-        # ----------------------------------------------------
-        # Build RAG Database
-        # ----------------------------------------------------
-
-        metadata = (
-            rag_pipeline.build_vector_database(
-                str(project_folder)
-            )
-        )
-
-        # ----------------------------------------------------
-        # Response
-        # ----------------------------------------------------
-
-        return {
-            "success": True,
-            "message": (
-                "Project uploaded and "
-                "indexed successfully."
-            ),
-            "project_name": project_name,
-            "metadata": metadata
-        }
 
     except HTTPException:
         raise
 
-    except zipfile.BadZipFile:
-
-        raise HTTPException(
-            status_code=400,
-            detail="Invalid or corrupted ZIP file."
-        )
-
     except Exception as e:
 
         print(
-            "Upload Error:",
+            "Upload Files Error:",
             repr(e)
         )
 
         raise HTTPException(
             status_code=500,
-            detail=(
-                "Failed to process "
-                "uploaded project."
-            )
+            detail="Failed to upload source files."
         )
 
     finally:
 
-        try:
-            await file.close()
-        except Exception:
-            pass
+        for file in files:
+            try:
+                await file.close()
+            except Exception:
+                pass
+            
+@app.post("/paste-code")
+def paste_code(
+    data: PasteCodeRequest
+):
+    try:
 
+        return upload_service.process_paste_code(
+            code=data.code,
+            filename=data.filename
+        )
 
+    except HTTPException:
+        raise
+
+    except Exception as e:
+
+        print(
+            "Paste Code Error:",
+            repr(e)
+        )
+
+        raise HTTPException(
+            status_code=500,
+            detail="Failed to process pasted code."
+        )
 # ============================================================
 # Review Project API
 # ============================================================

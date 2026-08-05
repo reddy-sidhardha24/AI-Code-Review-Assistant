@@ -1,20 +1,20 @@
 {
-    "project_name": "prog2",
+    "project_name": "pasted_code",
     "total_files": 1,
-    "total_lines": 444,
+    "total_lines": 1,
     "languages": {
-        "JavaScript": {
+        "Python": {
             "files": 1,
-            "lines": 444
+            "lines": 1
         }
     },
     "files": [
         {
-            "name": "AdminDashboard.jsx",
-            "path": "AdminDashboard.jsx",
-            "extension": ".jsx",
-            "language": "JavaScript",
-            "lines": 444
+            "name": "main.py",
+            "path": "main.py",
+            "extension": ".py",
+            "language": "Python",
+            "lines": 1
         }
     ]
 }

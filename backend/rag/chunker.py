@@ -46,29 +46,14 @@ class CodeChunker:
         start_line: int
     ) -> str:
         """
-        Converts:
-
-        public class Main {
-            int x = 10;
-        }
-
-        into numbered source code such as:
-
-        1 | public class Main {
-        2 |     int x = 10;
-        3 | }
-
-        start_line represents the real line number
-        in the original source file.
+        Adds original source line numbers.
         """
 
         numbered_lines = []
 
         for offset, line in enumerate(lines):
 
-            actual_line_number = (
-                start_line + offset
-            )
+            actual_line_number = start_line + offset
 
             numbered_lines.append(
                 f"{actual_line_number:>5} | {line}"
@@ -91,13 +76,17 @@ class CodeChunker:
 
         for doc in documents:
 
+            # ------------------------------------------
+            # Track chunk order within this file
+            # ------------------------------------------
+
+            file_chunk_index = 0
+
             content = doc.get(
                 "content",
                 ""
             )
 
-            # Keep blank lines because they are real
-            # source-code lines.
             lines = content.splitlines()
 
             if not lines:
@@ -114,29 +103,20 @@ class CodeChunker:
 
                 chunk_lines = lines[start:end]
 
-                # -----------------------------------------
-                # Real source line numbers
-                # -----------------------------------------
-
                 start_line = start + 1
                 end_line = end
 
-                # -----------------------------------------
+                # ------------------------------------------
                 # Plain content
-                #
-                # Used for embeddings / semantic search.
-                # -----------------------------------------
+                # ------------------------------------------
 
                 chunk_text = "\n".join(
                     chunk_lines
                 )
 
-                # -----------------------------------------
+                # ------------------------------------------
                 # Numbered content
-                #
-                # Used later by the LLM so it can identify
-                # exact source-code locations.
-                # -----------------------------------------
+                # ------------------------------------------
 
                 numbered_text = (
                     self._add_line_numbers(
@@ -145,12 +125,17 @@ class CodeChunker:
                     )
                 )
 
-                # -----------------------------------------
+                # ------------------------------------------
                 # Create Chunk
-                # -----------------------------------------
+                # ------------------------------------------
 
                 chunk = {
+
+                    # Global chunk id
                     "chunk_id": chunk_id,
+
+                    # Position inside this file
+                    "file_chunk_index": file_chunk_index,
 
                     "path": doc.get(
                         "path",
@@ -184,22 +169,23 @@ class CodeChunker:
 
                     "end_line": end_line,
 
-                    # Plain source code
+                    # Plain code (used for embeddings)
                     "content": chunk_text,
 
-                    # Source code with exact line numbers
+                    # Line-numbered code (used by LLM)
                     "numbered_content": numbered_text,
                 }
 
                 chunks.append(chunk)
 
                 chunk_id += 1
+                file_chunk_index += 1
 
-                # Last chunk
+                # Last chunk reached
                 if end >= len(lines):
                     break
 
-                # Move forward while preserving overlap
+                # Move forward with overlap
                 start += (
                     self.chunk_size -
                     self.overlap
@@ -244,45 +230,38 @@ if __name__ == "__main__":
         sample_documents
     )
 
-    print(
-        f"\nTotal Chunks: {len(chunks)}\n"
-    )
+    print(f"\nTotal Chunks: {len(chunks)}\n")
 
     for chunk in chunks:
 
         print("=" * 80)
 
         print(
-            f"Chunk ID : "
-            f"{chunk['chunk_id']}"
+            f"Chunk ID         : {chunk['chunk_id']}"
         )
 
         print(
-            f"File     : "
-            f"{chunk['name']}"
+            f"File Chunk Index : {chunk['file_chunk_index']}"
         )
 
         print(
-            f"Language : "
-            f"{chunk['language']}"
+            f"File             : {chunk['name']}"
         )
 
         print(
-            f"Lines    : "
-            f"{chunk['start_line']} - "
-            f"{chunk['end_line']}"
+            f"Language         : {chunk['language']}"
+        )
+
+        print(
+            f"Lines            : {chunk['start_line']} - {chunk['end_line']}"
         )
 
         print("\nPlain Content:\n")
 
-        print(
-            chunk["content"]
-        )
+        print(chunk["content"])
 
         print("\nNumbered Content:\n")
 
-        print(
-            chunk["numbered_content"]
-        )
+        print(chunk["numbered_content"])
 
         print()

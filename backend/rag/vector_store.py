@@ -43,8 +43,7 @@ class VectorStore:
 
         vectors = []
 
-        # Important:
-        # Reset metadata before building a new index.
+        # Reset metadata for every new project
         self.metadata = []
 
         for chunk in embedded_chunks:
@@ -63,16 +62,27 @@ class VectorStore:
 
             vectors.append(embedding)
 
-            # ------------------------------------------
-            # Store all information required later
-            # during retrieval and prompt generation.
-            # ------------------------------------------
-
             self.metadata.append(
+
                 {
+
+                    # =====================================
+                    # Chunk Information
+                    # =====================================
+
                     "chunk_id": chunk.get(
                         "chunk_id"
                     ),
+
+                    # NEW FIELD
+                    "file_chunk_index": chunk.get(
+                        "file_chunk_index",
+                        0
+                    ),
+
+                    # =====================================
+                    # File Information
+                    # =====================================
 
                     "path": chunk.get(
                         "path",
@@ -102,6 +112,10 @@ class VectorStore:
                         "Unknown"
                     ),
 
+                    # =====================================
+                    # Source Location
+                    # =====================================
+
                     "start_line": chunk.get(
                         "start_line"
                     ),
@@ -110,19 +124,21 @@ class VectorStore:
                         "end_line"
                     ),
 
-                    # Plain code used for semantic meaning
+                    # =====================================
+                    # Code
+                    # =====================================
+
                     "content": chunk.get(
                         "content",
                         ""
                     ),
 
-                    # Code containing original source
-                    # line numbers for grounded reviews
                     "numbered_content": chunk.get(
                         "numbered_content",
                         ""
                     ),
                 }
+
             )
 
         if not vectors:
@@ -132,18 +148,10 @@ class VectorStore:
                 "to create the FAISS index."
             )
 
-        # ----------------------------------------------
-        # Convert vectors to FAISS-compatible format
-        # ----------------------------------------------
-
         vectors = np.asarray(
             vectors,
             dtype="float32"
         )
-
-        # ----------------------------------------------
-        # Validate embedding dimensions
-        # ----------------------------------------------
 
         if vectors.ndim != 2:
 
@@ -158,10 +166,6 @@ class VectorStore:
                 f"Expected {self.embedding_dimension}, "
                 f"received {vectors.shape[1]}."
             )
-
-        # ----------------------------------------------
-        # Create a fresh FAISS index
-        # ----------------------------------------------
 
         self.index = faiss.IndexFlatL2(
             self.embedding_dimension
@@ -184,7 +188,6 @@ class VectorStore:
     ):
 
         if self.index.ntotal == 0:
-
             return []
 
         query_embedding = np.asarray(
@@ -200,7 +203,6 @@ class VectorStore:
                 f"received {query_embedding.shape[1]}."
             )
 
-        # Do not request more results than exist.
         actual_top_k = min(
             top_k,
             self.index.ntotal
@@ -235,7 +237,7 @@ class VectorStore:
         return results
 
     # ==================================================
-    # Save Vector Database
+    # Save
     # ==================================================
 
     def save(
@@ -290,7 +292,7 @@ class VectorStore:
         )
 
     # ==================================================
-    # Load Vector Database
+    # Load
     # ==================================================
 
     def load(
@@ -311,17 +313,9 @@ class VectorStore:
                 f"Metadata file not found: {metadata_path}"
             )
 
-        # ----------------------------------------------
-        # Load FAISS
-        # ----------------------------------------------
-
         self.index = faiss.read_index(
             index_path
         )
-
-        # ----------------------------------------------
-        # Load metadata
-        # ----------------------------------------------
 
         with open(
             metadata_path,
@@ -331,10 +325,6 @@ class VectorStore:
             self.metadata = pickle.load(
                 file
             )
-
-        # ----------------------------------------------
-        # Validate consistency
-        # ----------------------------------------------
 
         if self.index.ntotal != len(self.metadata):
 
@@ -346,8 +336,7 @@ class VectorStore:
             )
 
         print(
-            f"Loaded {len(self.metadata)} "
-            f"chunks from vector database."
+            f"Loaded {len(self.metadata)} chunks from vector database."
         )
 
     # ==================================================
@@ -355,5 +344,4 @@ class VectorStore:
     # ==================================================
 
     def size(self) -> int:
-
         return self.index.ntotal
