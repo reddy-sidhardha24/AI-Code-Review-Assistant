@@ -1,11 +1,11 @@
 {
     "project_name": "pasted_code",
     "total_files": 1,
-    "total_lines": 1,
+    "total_lines": 16,
     "languages": {
         "Python": {
             "files": 1,
-            "lines": 1
+            "lines": 16
         }
     },
     "files": [
@@ -14,7 +14,7 @@
             "path": "main.py",
             "extension": ".py",
             "language": "Python",
-            "lines": 1
+            "lines": 16
         }
     ]
 }

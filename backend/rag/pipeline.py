@@ -768,32 +768,7 @@ class RAGPipeline:
 
         return self.project_metadata
 
-    # ==================================================
-    # Get Retrieval Statistics
-    # ==================================================
-
-    def get_retrieval_statistics(
-        self
-    ):
-
-        if self.retriever is None:
-
-            if not self.vector_database_exists():
-
-                return {
-                    "total_chunks": 0,
-                    "total_indexed_files": 0,
-                    "chunks_per_file": {}
-                }
-
-            self.retriever = Retriever()
-
-        return (
-            self.retriever
-            .get_retrieval_statistics()
-        )
-
-
+    
 # ============================================================
 # Local Test
 # ============================================================

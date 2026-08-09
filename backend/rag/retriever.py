@@ -50,7 +50,32 @@ class Retriever:
             f"Retriever Ready. "
             f"{len(self.vector_store.metadata)} chunks indexed."
         )
+        # =====================================================
+    # Retrieval Statistics
+    # =====================================================
 
+    def get_retrieval_statistics(self):
+
+        indexed_files = set()
+
+        for chunk in self.vector_store.metadata:
+
+            file_path = (
+                chunk.get("relative_path")
+                or chunk.get("path")
+                or chunk.get("file")
+                or ""
+            )
+
+            if file_path:
+                indexed_files.add(file_path)
+
+        return {
+            "total_indexed_files": len(indexed_files),
+            "total_chunks": len(
+                self.vector_store.metadata
+            )
+        }
     # =====================================================
     # Intent Detection
     # =====================================================
@@ -271,152 +296,336 @@ class Retriever:
         )
 
         return expanded
+
     # =====================================================
-# Advanced Retrieval
-# =====================================================
+    # Advanced Retrieval
+    # =====================================================
 
-def retrieve(
-    self,
-    query: str,
-    top_k: int = 5,
-) -> List[Dict]:
-    """
-    Advanced Retrieval Pipeline
+    def retrieve(
+        self,
+        query: str,
+        top_k: int = 5,
+    ) -> List[Dict]:
+        """
+        Advanced Retrieval Pipeline
 
-    1. Detect query intent
-    2. Semantic search
-    3. Similarity filtering
-    4. Context expansion
-    5. Remove duplicates
-    6. Ranking
-    """
+        1. Detect query intent
+        2. Semantic search
+        3. Similarity filtering
+        4. Context expansion
+        5. Remove duplicates
+        6. Ranking
+        """
 
-    if not query.strip():
+        if not query.strip():
 
-        raise ValueError(
-            "Retrieval query cannot be empty."
+            raise ValueError(
+                "Retrieval query cannot be empty."
+            )
+
+        total_chunks = len(
+            self.vector_store.metadata
         )
 
-    total_chunks = len(
-        self.vector_store.metadata
-    )
+        if total_chunks == 0:
+            return []
 
-    if total_chunks == 0:
-        return []
+        # -------------------------------------------------
+        # Detect Query Type
+        # -------------------------------------------------
 
-    # -------------------------------------------------
-    # Detect Query Type
-    # -------------------------------------------------
-
-    query_type = self.detect_query_type(
-        query
-    )
-
-    print(
-        f"\nQuery Type: {query_type}"
-    )
-
-    # -------------------------------------------------
-    # Encode Query
-    # -------------------------------------------------
-
-    query_embedding = (
-        self.embedder.model.encode(
-            query,
-            convert_to_numpy=True,
-            normalize_embeddings=True,
+        query_type = self.detect_query_type(
+            query
         )
-    )
-
-    # -------------------------------------------------
-    # Broad search before filtering
-    # -------------------------------------------------
-
-    search_size = min(
-        max(
-            top_k * 3,
-            10
-        ),
-        total_chunks,
-    )
-
-    print(
-        "Using semantic retrieval..."
-    )
-
-    retrieved = (
-        self.vector_store.search(
-            query_embedding,
-            top_k=search_size,
-        )
-    )
-
-    # -------------------------------------------------
-    # Similarity Filtering
-    # -------------------------------------------------
-
-    retrieved = self.filter_by_similarity(
-        retrieved
-    )
-
-    if not retrieved:
 
         print(
-            "No chunks passed similarity filter."
+            f"\nQuery Type: {query_type}"
         )
 
-        return []
+        # -------------------------------------------------
+        # Encode Query
+        # -------------------------------------------------
 
-    # -------------------------------------------------
-    # Context Expansion
-    # -------------------------------------------------
-
-    print(
-        "Expanding neighbouring chunks..."
-    )
-
-    expanded = self.expand_context(
-        retrieved
-    )
-
-    # -------------------------------------------------
-    # Remove duplicates
-    # -------------------------------------------------
-
-    expanded = self.remove_duplicates(
-        expanded
-    )
-
-    # -------------------------------------------------
-    # Ranking
-    # -------------------------------------------------
-
-    if query_type in [
-        "bug",
-        "security",
-        "performance",
-    ]:
-
-        expanded.sort(
-            key=lambda chunk: (
-                chunk.get(
-                    "distance",
-                    999
-                ),
-                chunk.get(
-                    "start_line",
-                    0
-                )
+        query_embedding = (
+            self.embedder.model.encode(
+                query,
+                convert_to_numpy=True,
+                normalize_embeddings=True,
             )
         )
 
-    else:
+        # -------------------------------------------------
+        # Broad search before filtering
+        # -------------------------------------------------
 
-        expanded.sort(
+        search_size = min(
+            max(
+                top_k * 3,
+                10
+            ),
+            total_chunks,
+        )
+
+        print(
+            "Using semantic retrieval..."
+        )
+
+        retrieved = (
+            self.vector_store.search(
+                query_embedding,
+                top_k=search_size,
+            )
+        )
+
+        # -------------------------------------------------
+        # Similarity Filtering
+        # -------------------------------------------------
+
+        retrieved = self.filter_by_similarity(
+            retrieved
+        )
+
+        if not retrieved:
+
+            print(
+                "No chunks passed similarity filter."
+            )
+
+            return []
+
+        # -------------------------------------------------
+        # Context Expansion
+        # -------------------------------------------------
+
+        print(
+            "Expanding neighbouring chunks..."
+        )
+
+        expanded = self.expand_context(
+            retrieved
+        )
+
+        # -------------------------------------------------
+        # Remove duplicates
+        # -------------------------------------------------
+
+        expanded = self.remove_duplicates(
+            expanded
+        )
+
+        # -------------------------------------------------
+        # Ranking
+        # -------------------------------------------------
+
+        if query_type in [
+            "bug",
+            "security",
+            "performance",
+        ]:
+
+            expanded.sort(
+                key=lambda chunk: (
+                    chunk.get(
+                        "distance",
+                        999
+                    ),
+                    chunk.get(
+                        "start_line",
+                        0
+                    )
+                )
+            )
+
+        else:
+
+            expanded.sort(
+                key=lambda chunk: (
+                    chunk.get(
+                        "relative_path",
+                        ""
+                    ),
+                    chunk.get(
+                        "start_line",
+                        0
+                    )
+                )
+            )
+
+        # -------------------------------------------------
+        # Final Limit
+        # -------------------------------------------------
+
+        final_chunks = expanded[:top_k]
+
+        print(
+            f"\nRetrieved {len(final_chunks)} chunks."
+        )
+
+        for i, chunk in enumerate(
+            final_chunks,
+            start=1
+        ):
+
+            print()
+
+            print(
+                f"Retrieved Chunk {i}"
+            )
+
+            print(
+                f"File: {chunk.get('name')}"
+            )
+
+            print(
+                f"Lines: "
+                f"{chunk.get('start_line')} - "
+                f"{chunk.get('end_line')}"
+            )
+
+            print(
+                f"Distance: "
+                f"{chunk.get('distance', 'Expanded')}"
+            )
+
+        return final_chunks
+       
+    # =====================================================
+    # Project-Wide Retrieval
+    # =====================================================
+
+    def retrieve_project_wide(
+        self,
+        query: str = "",
+        max_chunks: int = 20,
+        chunks_per_file: int = 2,
+    ) -> List[Dict]:
+        """
+        Project-wide retrieval.
+
+        Retrieves representative chunks from across
+        the indexed project.
+
+        Parameters
+        ----------
+        query:
+            Review question. Accepted for compatibility
+            with the RAG pipeline.
+
+        max_chunks:
+            Maximum total chunks to return.
+
+        chunks_per_file:
+            Maximum number of chunks selected from
+            each file.
+        """
+
+        total_chunks = len(
+            self.vector_store.metadata
+        )
+
+        if total_chunks == 0:
+            return []
+
+        # -------------------------------------------------
+        # Group chunks by file
+        # -------------------------------------------------
+
+        chunks_by_file = {}
+
+        for chunk in self.vector_store.metadata:
+
+            file_path = chunk.get(
+                "relative_path",
+                chunk.get(
+                    "path",
+                    chunk.get(
+                        "name",
+                        ""
+                    )
+                )
+            )
+
+            if file_path not in chunks_by_file:
+
+                chunks_by_file[file_path] = []
+
+            chunks_by_file[file_path].append(
+                chunk
+            )
+
+        # -------------------------------------------------
+        # Sort chunks inside each file
+        # -------------------------------------------------
+
+        for file_path in chunks_by_file:
+
+            chunks_by_file[file_path].sort(
+                key=lambda chunk: (
+                    chunk.get(
+                        "start_line",
+                        0
+                    ),
+                    chunk.get(
+                        "end_line",
+                        0
+                    )
+                )
+            )
+
+        # -------------------------------------------------
+        # Select chunks from every file
+        # -------------------------------------------------
+
+        selected_chunks = []
+
+        for file_path in sorted(
+            chunks_by_file.keys()
+        ):
+
+            file_chunks = chunks_by_file[
+                file_path
+            ]
+
+            selected_chunks.extend(
+                file_chunks[
+                    :chunks_per_file
+                ]
+            )
+
+            if len(selected_chunks) >= max_chunks:
+
+                break
+
+        # -------------------------------------------------
+        # Remove duplicates
+        # -------------------------------------------------
+
+        selected_chunks = (
+            self.remove_duplicates(
+                selected_chunks
+            )
+        )
+
+        # -------------------------------------------------
+        # Final limit
+        # -------------------------------------------------
+
+        final_chunks = selected_chunks[
+            :max_chunks
+        ]
+
+        # -------------------------------------------------
+        # Sort final chunks
+        # -------------------------------------------------
+
+        final_chunks.sort(
             key=lambda chunk: (
                 chunk.get(
                     "relative_path",
-                    ""
+                    chunk.get(
+                        "path",
+                        ""
+                    )
                 ),
                 chunk.get(
                     "start_line",
@@ -425,40 +634,80 @@ def retrieve(
             )
         )
 
-    # -------------------------------------------------
-    # Final Limit
-    # -------------------------------------------------
-
-    final_chunks = expanded[:top_k]
-
-    print(
-        f"\nRetrieved {len(final_chunks)} chunks."
-    )
-
-    for i, chunk in enumerate(
-        final_chunks,
-        start=1
-    ):
-
-        print()
+        # -------------------------------------------------
+        # Debug information
+        # -------------------------------------------------
 
         print(
-            f"Retrieved Chunk {i}"
+            f"\nProject-wide retrieval: "
+            f"{len(final_chunks)} chunks."
         )
+
+        # Calculate represented files separately.
+        # This avoids complicated nested f-strings.
+
+        represented_files = set()
+
+        for chunk in final_chunks:
+
+            file_path = chunk.get(
+                "relative_path",
+                chunk.get(
+                    "path",
+                    chunk.get(
+                        "name",
+                        ""
+                    )
+                )
+            )
+
+            represented_files.add(
+                file_path
+            )
 
         print(
-            f"File: {chunk.get('name')}"
+            "Files represented:",
+            len(represented_files)
         )
 
-        print(
-            f"Lines: "
-            f"{chunk.get('start_line')} - "
-            f"{chunk.get('end_line')}"
-        )
+        # -------------------------------------------------
+        # Print retrieved chunks
+        # -------------------------------------------------
 
-        print(
-            f"Distance: "
-            f"{chunk.get('distance','Expanded')}"
-        )
+        for i, chunk in enumerate(
+            final_chunks,
+            start=1
+        ):
 
-    return final_chunks
+            print()
+
+            print(
+                f"Project Chunk {i}"
+            )
+
+            print(
+                "File:",
+                chunk.get(
+                    "name",
+                    "Unknown"
+                )
+            )
+
+            print(
+                "Path:",
+                chunk.get(
+                    "path",
+                    chunk.get(
+                        "relative_path",
+                        "Unknown"
+                    )
+                )
+            )
+
+            print(
+                "Lines:",
+                f"{chunk.get('start_line', '?')} - "
+                f"{chunk.get('end_line', '?')}"
+            )
+
+        return final_chunks

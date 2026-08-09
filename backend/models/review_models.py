@@ -3,9 +3,7 @@ from typing import List, Optional, Literal
 from pydantic import (
     BaseModel,
     Field,
-    ValidationError
 )
-
 
 
 # ============================================================
@@ -17,7 +15,23 @@ class ReviewRequest(BaseModel):
     question: str = Field(
         min_length=1,
         max_length=2000
+)
+# ============================================================
+# Paste Code Request
+# ============================================================
+
+class PasteCodeRequest(BaseModel):
+
+    filename: str = Field(
+        default="main.py",
+        min_length=1,
+        max_length=255
     )
+
+    code: str = Field(
+        min_length=1
+    )
+
 # ============================================================
 # Project Information
 # ============================================================
@@ -184,18 +198,34 @@ class SecurityInfo(BaseModel):
 
 
 # ============================================================
+# Code Quality Finding
+# ============================================================
+
+class CodeQualityFinding(BaseModel):
+
+    type: str
+
+    description: str
+
+
+# ============================================================
 # Code Quality
 # ============================================================
 
 class CodeQualityInfo(BaseModel):
 
-    observations: List[str] = Field(
+    observations: List[
+        CodeQualityFinding
+    ] = Field(
         default_factory=list
     )
 
-    suggestions: List[str] = Field(
+    suggestions: List[
+        CodeQualityFinding
+    ] = Field(
         default_factory=list
     )
+
 # ============================================================
 # Structured Review
 # ============================================================
@@ -206,7 +236,7 @@ class StructuredReview(BaseModel):
 
     question: str
 
-    # New field from dynamic PromptBuilder
+    # Dynamic review types detected by PromptBuilder
     review_types: List[str] = Field(
         default_factory=list
     )
@@ -226,9 +256,9 @@ class StructuredReview(BaseModel):
     )
 
     # --------------------------------------------------------
-    # These are now Optional.
+    # Optional analysis sections
     #
-    # Explanation-only questions should NOT be forced to
+    # Explanation-only questions should not be forced to
     # generate meaningless performance/security sections.
     # --------------------------------------------------------
 
