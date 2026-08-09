@@ -1,17 +1,16 @@
 import { useState } from "react";
 import API from "../api";
+import { saveReviewToHistory } from "../utils/reviewHistory";
 
-
-// ============================================================
-// Interfaces
-// ============================================================
+/* ============================================================
+   TYPES
+   ============================================================ */
 
 interface FileAnalyzed {
   file_name: string;
   path: string;
   language: string;
 }
-
 
 interface BugFinding {
   title: string;
@@ -27,7 +26,6 @@ interface BugFinding {
   confidence: number;
 }
 
-
 interface ErrorFinding {
   type: string;
   title: string;
@@ -41,19 +39,17 @@ interface ErrorFinding {
   confidence: number;
 }
 
-
 interface PerformanceIssue {
   title: string;
   description: string;
-  file: string;
+  file?: string;
   line?: number | null;
   line_range?: string | null;
-  evidence: string;
-  impact: string;
-  suggestion: string;
-  confidence: number;
+  evidence?: string;
+  impact?: string;
+  suggestion?: string;
+  confidence?: number;
 }
-
 
 interface PerformanceInfo {
   time_complexity: string;
@@ -61,26 +57,36 @@ interface PerformanceInfo {
   issues: PerformanceIssue[];
 }
 
+interface SecurityIssue {
+  title: string;
+  description: string;
+}
 
 interface SecurityInfo {
   issues_found: number;
-  issues: string[];
+  issues: SecurityIssue[];
 }
 
+interface CodeQualityFinding {
+  type?: string;
+  title?: string;
+  description: string;
+}
 
 interface CodeQualityInfo {
-  observations: string[];
-  suggestions: string[];
+  observations: CodeQualityFinding[];
+  suggestions: CodeQualityFinding[];
 }
 
+interface ProjectInfo {
+  name?: string | null;
+  languages: string[];
+  total_files: number;
+  total_lines: number;
+}
 
 interface ReviewData {
-  project: {
-    name?: string | null;
-    languages: string[];
-    total_files: number;
-    total_lines: number;
-  };
+  project: ProjectInfo;
 
   question: string;
 
@@ -115,13 +121,56 @@ interface ReviewData {
   final_verdict: string;
 }
 
+/* ============================================================
+   HELPERS
+   ============================================================ */
 
-// ============================================================
-// Review Component
-// ============================================================
+function getSeverityClass(
+  severity: string
+): string {
+  const value =
+    severity.toLowerCase();
+
+  if (value === "critical") {
+    return "severity-critical";
+  }
+
+  if (value === "high") {
+    return "severity-high";
+  }
+
+  if (value === "medium") {
+    return "severity-medium";
+  }
+
+  return "severity-low";
+}
+
+function formatReviewType(
+  value: string
+): string {
+  return value
+    .replace(/_/g, " ")
+    .replace(/\b\w/g, (char) =>
+      char.toUpperCase()
+    );
+}
+
+function getLanguageLabel(
+  languages: string[]
+): string {
+  if (!languages || languages.length === 0) {
+    return "Unknown";
+  }
+
+  return languages.join(", ");
+}
+
+/* ============================================================
+   REVIEW COMPONENT
+   ============================================================ */
 
 function Review() {
-
   const [question, setQuestion] =
     useState("");
 
@@ -134,1483 +183,1447 @@ function Review() {
   const [error, setError] =
     useState("");
 
-
-  // ==========================================================
-  // Ask Question
-  // ==========================================================
+  /* ==========================================================
+     ASK QUESTION
+     ========================================================== */
 
   const askQuestion = async () => {
-
     const trimmedQuestion =
       question.trim();
 
     if (!trimmedQuestion) {
-
-      alert(
-        "Please enter a question."
+      setError(
+        "Please enter a review question."
       );
-
       return;
     }
 
     setLoading(true);
-
     setReview(null);
-
     setError("");
 
     try {
-
-      const res = await API.post(
+      const response = await API.post(
         "/review",
         {
-          question: trimmedQuestion,
+          question:
+            trimmedQuestion,
         }
       );
 
-
       if (
-        res.data?.success &&
-        res.data?.review
+        response.data?.success &&
+        response.data?.review
       ) {
+        const reviewData =
+          response.data
+            .review as ReviewData;
 
-        setReview(
-          res.data.review
+        setReview(reviewData);
+
+        /*
+         * Save completed review for
+         * Dashboard + History.
+         */
+
+        saveReviewToHistory(
+          reviewData,
+          trimmedQuestion
         );
-
       } else {
-
         setError(
-          "No review response received."
+          "The backend did not return a valid review."
         );
       }
-
     } catch (err: any) {
-
       console.error(
         "Review request failed:",
         err
       );
 
+      const backendError =
+        err.response?.data?.detail;
 
-      if (
-        err.response?.data?.detail
-      ) {
-
+      if (backendError) {
         setError(
-          err.response.data.detail
+          typeof backendError ===
+            "string"
+            ? backendError
+            : "The review request failed."
         );
-
-      } else {
-
+      } else if (
+        err.response?.status === 502
+      ) {
         setError(
-          "Unable to connect to backend."
+          "The AI review response could not be validated by the backend."
+        );
+      } else {
+        setError(
+          "Unable to connect to the backend."
         );
       }
-
     } finally {
-
       setLoading(false);
     }
   };
 
+  /* ==========================================================
+     KEYBOARD
+     ========================================================== */
 
-  // ==========================================================
-  // UI
-  // ==========================================================
+  const handleKeyDown = (
+    event: React.KeyboardEvent<HTMLTextAreaElement>
+  ) => {
+    if (
+      event.key === "Enter" &&
+      event.ctrlKey
+    ) {
+      askQuestion();
+    }
+  };
+
+  /* ==========================================================
+     CLEAR REVIEW
+     ========================================================== */
+
+  const clearReview = () => {
+    setReview(null);
+    setError("");
+  };
+
+  /* ==========================================================
+     RENDER
+     ========================================================== */
 
   return (
+    <main className="review-modern-page">
 
-    <div
-      style={{
-        width: "900px",
-        maxWidth: "90%",
-        margin: "40px auto",
-      }}
-    >
+      <div className="container">
 
-      <h1>
-        AI Code Review Assistant
-      </h1>
+        {/* ==================================================
+            PAGE HEADER
+            ================================================== */}
 
+        <section className="review-modern-header">
 
-      {/* =====================================================
-          QUESTION
-      ===================================================== */}
+          <div>
 
-      <textarea
-        rows={6}
-        placeholder="Ask anything about the uploaded project..."
-        value={question}
-        disabled={loading}
-        onChange={(e) =>
-          setQuestion(
-            e.target.value
-          )
-        }
-        style={{
-          width: "100%",
-          padding: "12px",
-          fontSize: "16px",
-          boxSizing: "border-box",
-        }}
-      />
+            <div className="section-label">
+              AI CODE ANALYSIS
+            </div>
 
+            <h1>
+              Review your code
+              <span>.</span>
+            </h1>
 
-      <br />
-      <br />
-
-
-      <button
-        onClick={askQuestion}
-        disabled={loading}
-      >
-
-        {
-          loading
-            ? "Analyzing..."
-            : "Review Project"
-        }
-
-      </button>
-
-
-      {/* =====================================================
-          LOADING
-      ===================================================== */}
-
-      {
-        loading && (
-
-          <h3>
-            Analyzing project...
-          </h3>
-
-        )
-      }
-
-
-      {/* =====================================================
-          ERROR
-      ===================================================== */}
-
-      {
-        error && (
-
-          <div
-            style={{
-              marginTop: "20px",
-              color: "red",
-              fontWeight: "bold",
-            }}
-          >
-
-            {error}
+            <p>
+              Ask questions about your indexed
+              project and get contextual analysis
+              powered by RAG and AI.
+            </p>
 
           </div>
 
-        )
-      }
+        </section>
 
 
-      {/* =====================================================
-          REVIEW RESULT
-      ===================================================== */}
+        {/* ==================================================
+            QUESTION PANEL
+            ================================================== */}
 
-      {
-        review && (
+        <section className="review-input-card">
 
-          <div
-            style={{
-              marginTop: "30px",
-              border: "1px solid #ddd",
-              padding: "25px",
-              borderRadius: "10px",
-              lineHeight: "1.7",
-            }}
-          >
+          <div className="review-input-header">
 
-            <h2>
-              Review Result
-            </h2>
+            <div>
+
+              <span className="review-input-label">
+                WHAT WOULD YOU LIKE TO ANALYZE?
+              </span>
+
+              <h2>
+                Ask your code reviewer
+              </h2>
+
+            </div>
+
+            <div className="review-ai-badge">
+              <span className="status-dot" />
+              AI Ready
+            </div>
+
+          </div>
 
 
-            {/* =================================================
-                PROJECT INFORMATION
-            ================================================= */}
+          <textarea
+            className="review-question-input"
+            rows={7}
+            maxLength={2000}
+            placeholder={
+              "Example: Perform a complete project-wide review covering bugs, security, performance, and code quality."
+            }
+            value={question}
+            disabled={loading}
+            onChange={(event) =>
+              setQuestion(
+                event.target.value
+              )
+            }
+            onKeyDown={handleKeyDown}
+          />
+
+
+          <div className="review-input-footer">
+
+            <span className="review-character-count">
+              {question.length} / 2000
+            </span>
+
+            <button
+              className="review-analyze-button"
+              onClick={askQuestion}
+              disabled={loading}
+            >
+              {loading ? (
+                <>
+                  <span className="review-spinner" />
+                  Analyzing...
+                </>
+              ) : (
+                <>
+                  Analyze Project
+                  <span>→</span>
+                </>
+              )}
+            </button>
+
+          </div>
+
+
+          {/* ==================================================
+              QUICK PROMPTS
+              ================================================== */}
+
+          <div className="review-quick-prompts">
+
+            <span>
+              Try a review:
+            </span>
+
+            <button
+              onClick={() =>
+                setQuestion(
+                  "Perform a complete project-wide review covering bugs, security, performance, and code quality."
+                )
+              }
+              disabled={loading}
+            >
+              Full Project Review
+            </button>
+
+            <button
+              onClick={() =>
+                setQuestion(
+                  "Find all bugs and runtime errors in the project."
+                )
+              }
+              disabled={loading}
+            >
+              Find Bugs
+            </button>
+
+            <button
+              onClick={() =>
+                setQuestion(
+                  "Perform a security review and identify security vulnerabilities."
+                )
+              }
+              disabled={loading}
+            >
+              Security
+            </button>
+
+            <button
+              onClick={() =>
+                setQuestion(
+                  "Analyze the project's performance and identify performance bottlenecks."
+                )
+              }
+              disabled={loading}
+            >
+              Performance
+            </button>
+
+            <button
+              onClick={() =>
+                setQuestion(
+                  "Review the code quality, readability, maintainability, and architecture."
+                )
+              }
+              disabled={loading}
+            >
+              Code Quality
+            </button>
+
+          </div>
+
+        </section>
+
+
+        {/* ==================================================
+            ERROR
+            ================================================== */}
+
+        {error && (
+
+          <section className="review-error-card">
+
+            <div className="review-error-icon">
+              !
+            </div>
+
+            <div>
+
+              <h3>
+                Review failed
+              </h3>
+
+              <p>
+                {error}
+              </p>
+
+            </div>
+
+          </section>
+
+        )}
+
+
+        {/* ==================================================
+            LOADING
+            ================================================== */}
+
+        {loading && (
+
+          <section className="review-loading-card">
+
+            <div className="review-loading-animation">
+
+              <span />
+              <span />
+              <span />
+
+            </div>
 
             <h3>
-              Project Information
+              Analyzing your project
             </h3>
 
-
             <p>
-
-              <strong>
-                Project:
-              </strong>{" "}
-
-              {
-                review.project?.name ||
-                "Unknown"
-              }
-
+              Retrieving relevant code,
+              evaluating findings, and
+              generating the structured review.
             </p>
 
+            <div className="review-loading-steps">
 
-            <p>
+              <span>
+                ✓ Retrieving code
+              </span>
 
-              <strong>
-                Languages:
-              </strong>{" "}
+              <span>
+                • AI analysis
+              </span>
 
-              {
-                review.project
-                  ?.languages
-                  ?.length > 0
+              <span>
+                • Structuring results
+              </span>
 
-                  ? review.project.languages.join(
-                      ", "
-                    )
+            </div>
 
-                  : "Unknown"
-              }
+          </section>
 
-            </p>
-
-
-            <p>
-
-              <strong>
-                Total Files:
-              </strong>{" "}
-
-              {
-                review.project
-                  ?.total_files ?? 0
-              }
-
-            </p>
+        )}
 
 
-            <p>
+        {/* ==================================================
+            REVIEW RESULT
+            ================================================== */}
 
-              <strong>
-                Total Lines:
-              </strong>{" "}
+        {review && !loading && (
 
-              {
-                review.project
-                  ?.total_lines ?? 0
-              }
+          <section className="review-result-section">
 
-            </p>
+            {/* ================================================
+                RESULT HEADER
+                ================================================ */}
+
+            <div className="review-result-header">
+
+              <div>
+
+                <div className="section-label">
+                  ANALYSIS COMPLETE
+                </div>
+
+                <h2>
+                  {review.project?.name ||
+                    "Project Review"}
+                </h2>
+
+                <p>
+                  {getLanguageLabel(
+                    review.project
+                      ?.languages || []
+                  )}
+                  {" • "}
+                  {review.project
+                    ?.total_files || 0}{" "}
+                  files
+                  {" • "}
+                  {review.project
+                    ?.total_lines || 0}{" "}
+                  lines
+                </p>
+
+              </div>
 
 
-            {/* =================================================
+              <button
+                className="review-clear-button"
+                onClick={clearReview}
+              >
+                New Review
+              </button>
+
+            </div>
+
+
+            {/* ================================================
                 REVIEW TYPES
-            ================================================= */}
+                ================================================ */}
 
-            {
-              review.review_types?.length > 0 && (
+            {review.review_types &&
+              review.review_types.length >
+                0 && (
 
-                <>
-                  <h3>
-                    Review Types
-                  </h3>
+                <div className="review-type-list">
 
-                  <ul>
+                  {review.review_types.map(
+                    (type) => (
+                      <span
+                        key={type}
+                        className="review-type-badge"
+                      >
+                        {formatReviewType(
+                          type
+                        )}
+                      </span>
+                    )
+                  )}
 
-                    {
-                      review.review_types.map(
-                        (type, index) => (
-
-                          <li key={index}>
-                            {type}
-                          </li>
-
-                        )
-                      )
-                    }
-
-                  </ul>
-                </>
-
-              )
-            }
+                </div>
+              )}
 
 
-            {/* =================================================
-                ANSWER SUMMARY
-            ================================================= */}
+            {/* ================================================
+                SUMMARY
+                ================================================ */}
 
-            {
-              review.answer_summary && (
+            <section className="review-summary-card">
 
-                <>
-                  <h3>
-                    Code Summary
-                  </h3>
+              <div className="review-summary-icon">
+                ✦
+              </div>
 
-                  <p>
-                    {
-                      review.answer_summary
-                    }
-                  </p>
-                </>
+              <div>
 
-              )
-            }
+                <span>
+                  AI SUMMARY
+                </span>
+
+                <p>
+                  {review.answer_summary ||
+                    "No summary was returned."}
+                </p>
+
+              </div>
+
+            </section>
 
 
-            {/* =================================================
-                FILES ANALYZED
-            ================================================= */}
+            {/* ================================================
+                STATISTICS
+                ================================================ */}
 
-            {
-              review.files_analyzed
-                ?.length > 0 && (
+            <section className="review-stat-grid">
 
-                <>
-                  <h3>
-                    Files Analyzed
-                  </h3>
+              <div className="review-stat-card">
 
-                  <ul>
+                <span className="review-stat-label">
+                  BUGS
+                </span>
 
-                    {
-                      review.files_analyzed.map(
-                        (file, index) => (
+                <strong className="stat-red">
+                  {review.bugs?.length ||
+                    0}
+                </strong>
 
-                          <li
-                            key={index}
-                            style={{
-                              marginBottom:
-                                "10px",
-                            }}
-                          >
+                <small>
+                  detected
+                </small>
 
-                            <strong>
-                              {file.file_name}
-                            </strong>
+              </div>
 
-                            {" — "}
 
-                            {file.language}
+              <div className="review-stat-card">
 
-                            <br />
+                <span className="review-stat-label">
+                  SECURITY
+                </span>
 
-                            <span>
-                              {file.path}
+                <strong className="stat-yellow">
+                  {review.security
+                    ?.issues_found ||
+                    0}
+                </strong>
+
+                <small>
+                  issues
+                </small>
+
+              </div>
+
+
+              <div className="review-stat-card">
+
+                <span className="review-stat-label">
+                  PERFORMANCE
+                </span>
+
+                <strong className="stat-blue">
+                  {review.performance
+                    ?.issues?.length ||
+                    0}
+                </strong>
+
+                <small>
+                  concerns
+                </small>
+
+              </div>
+
+
+              <div className="review-stat-card">
+
+                <span className="review-stat-label">
+                  CODE QUALITY
+                </span>
+
+                <strong className="stat-purple">
+                  {(review.code_quality
+                    ?.observations
+                    ?.length || 0) +
+                    (review.code_quality
+                      ?.suggestions
+                      ?.length || 0)}
+                </strong>
+
+                <small>
+                  findings
+                </small>
+
+              </div>
+
+
+              <div className="review-stat-card">
+
+                <span className="review-stat-label">
+                  CONFIDENCE
+                </span>
+
+                <strong className="stat-green">
+                  {review.confidence || 0}%
+                </strong>
+
+                <small>
+                  AI confidence
+                </small>
+
+              </div>
+
+            </section>
+
+
+            {/* ================================================
+                FINAL VERDICT
+                ================================================ */}
+
+            <section className="review-verdict-card">
+
+              <div className="review-verdict-heading">
+
+                <span>
+                  FINAL VERDICT
+                </span>
+
+                <div className="review-confidence">
+                  {review.confidence || 0}%
+                  confidence
+                </div>
+
+              </div>
+
+              <p>
+                {review.final_verdict ||
+                  "No final verdict was provided."}
+              </p>
+
+            </section>
+
+
+            {/* ================================================
+                BUGS
+                ================================================ */}
+
+            {review.bugs &&
+              review.bugs.length > 0 && (
+
+                <section className="review-detail-section">
+
+                  <div className="review-detail-heading">
+
+                    <div>
+
+                      <span className="detail-icon danger">
+                        !
+                      </span>
+
+                      <div>
+
+                        <h3>
+                          Bugs & Runtime Issues
+                        </h3>
+
+                        <p>
+                          Confirmed and potential
+                          problems detected in the
+                          project.
+                        </p>
+
+                      </div>
+
+                    </div>
+
+                    <strong>
+                      {review.bugs.length}
+                    </strong>
+
+                  </div>
+
+
+                  <div className="review-findings">
+
+                    {review.bugs.map(
+                      (bug, index) => (
+
+                        <article
+                          className="finding-card"
+                          key={`${bug.title}-${index}`}
+                        >
+
+                          <div className="finding-top">
+
+                            <h4>
+                              {bug.title}
+                            </h4>
+
+                            <span
+                              className={`severity-badge ${getSeverityClass(
+                                bug.severity
+                              )}`}
+                            >
+                              {bug.severity}
                             </span>
 
-                          </li>
+                          </div>
 
-                        )
+
+                          <div className="finding-meta">
+
+                            <span>
+                              {bug.file}
+                            </span>
+
+                            {bug.line && (
+                              <span>
+                                Line{" "}
+                                {bug.line}
+                              </span>
+                            )}
+
+                            {bug.line_range && (
+                              <span>
+                                Lines{" "}
+                                {
+                                  bug.line_range
+                                }
+                              </span>
+                            )}
+
+                            <span>
+                              {bug.type}
+                            </span>
+
+                          </div>
+
+
+                          <p className="finding-description">
+                            {bug.description}
+                          </p>
+
+
+                          {bug.evidence && (
+                            <div className="finding-block">
+
+                              <span>
+                                EVIDENCE
+                              </span>
+
+                              <code>
+                                {bug.evidence}
+                              </code>
+
+                            </div>
+                          )}
+
+
+                          {bug.impact && (
+                            <div className="finding-text">
+
+                              <strong>
+                                Impact
+                              </strong>
+
+                              <p>
+                                {bug.impact}
+                              </p>
+
+                            </div>
+                          )}
+
+
+                          {bug.fix && (
+                            <div className="finding-fix">
+
+                              <strong>
+                                Recommended Fix
+                              </strong>
+
+                              <p>
+                                {bug.fix}
+                              </p>
+
+                            </div>
+                          )}
+
+                        </article>
+
                       )
-                    }
+                    )}
 
-                  </ul>
-                </>
+                  </div>
 
-              )
-            }
+                </section>
+              )}
 
 
-            {/* =================================================
-                BUGS
-            ================================================= */}
-
-            <h3>
-              Bugs Found
-            </h3>
-
-
-            {
-              !review.bugs ||
-              review.bugs.length === 0
-
-                ? (
-
-                  <p>
-                    No verified bugs found.
-                  </p>
-
-                )
-
-                : (
-
-                  review.bugs.map(
-                    (bug, index) => (
-
-                      <div
-                        key={index}
-                        style={{
-                          marginBottom:
-                            "25px",
-                          padding: "15px",
-                          border:
-                            "1px solid #444",
-                          borderRadius:
-                            "8px",
-                        }}
-                      >
-
-                        <h4>
-                          {bug.title}
-                        </h4>
-
-
-                        <p>
-
-                          <strong>
-                            Type:
-                          </strong>{" "}
-
-                          {bug.type}
-
-                        </p>
-
-
-                        <p>
-
-                          <strong>
-                            Severity:
-                          </strong>{" "}
-
-                          {bug.severity}
-
-                        </p>
-
-
-                        <p>
-
-                          <strong>
-                            File:
-                          </strong>{" "}
-
-                          {bug.file}
-
-                        </p>
-
-
-                        {
-                          bug.line !== null &&
-                          bug.line !== undefined && (
-
-                            <p>
-
-                              <strong>
-                                Line:
-                              </strong>{" "}
-
-                              {bug.line}
-
-                            </p>
-
-                          )
-                        }
-
-
-                        {
-                          bug.line_range && (
-
-                            <p>
-
-                              <strong>
-                                Lines:
-                              </strong>{" "}
-
-                              {
-                                bug.line_range
-                              }
-
-                            </p>
-
-                          )
-                        }
-
-
-                        {
-                          bug.description && (
-
-                            <p>
-
-                              <strong>
-                                Description:
-                              </strong>{" "}
-
-                              {
-                                bug.description
-                              }
-
-                            </p>
-
-                          )
-                        }
-
-
-                        {
-                          bug.evidence && (
-
-                            <p>
-
-                              <strong>
-                                Evidence:
-                              </strong>{" "}
-
-                              {
-                                bug.evidence
-                              }
-
-                            </p>
-
-                          )
-                        }
-
-
-                        {
-                          bug.impact && (
-
-                            <p>
-
-                              <strong>
-                                Impact:
-                              </strong>{" "}
-
-                              {
-                                bug.impact
-                              }
-
-                            </p>
-
-                          )
-                        }
-
-
-                        {
-                          bug.fix && (
-
-                            <p>
-
-                              <strong>
-                                Fix:
-                              </strong>{" "}
-
-                              {
-                                bug.fix
-                              }
-
-                            </p>
-
-                          )
-                        }
-
-
-                        <p>
-
-                          <strong>
-                            Confidence:
-                          </strong>{" "}
-
-                          {
-                            bug.confidence
-                          }%
-
-                        </p>
-
-                      </div>
-
-                    )
-                  )
-
-                )
-            }
-
-
-            {/* =================================================
+            {/* ================================================
                 ERRORS
-            ================================================= */}
+                ================================================ */}
 
-            <h3>
-              Errors
-            </h3>
+            {review.errors &&
+              review.errors.length > 0 && (
 
+                <section className="review-detail-section">
 
-            {
-              !review.errors ||
-              review.errors.length === 0
+                  <div className="review-detail-heading">
 
-                ? (
+                    <div>
 
-                  <p>
-                    No confirmed errors found.
-                  </p>
+                      <span className="detail-icon danger">
+                        !
+                      </span>
 
-                )
+                      <div>
 
-                : (
-
-                  review.errors.map(
-                    (item, index) => (
-
-                      <div
-                        key={index}
-                        style={{
-                          marginBottom:
-                            "25px",
-                          padding: "15px",
-                          border:
-                            "1px solid #444",
-                          borderRadius:
-                            "8px",
-                        }}
-                      >
-
-                        <h4>
-                          {item.title}
-                        </h4>
-
+                        <h3>
+                          Errors
+                        </h3>
 
                         <p>
-
-                          <strong>
-                            Type:
-                          </strong>{" "}
-
-                          {item.type}
-
-                        </p>
-
-
-                        <p>
-
-                          <strong>
-                            File:
-                          </strong>{" "}
-
-                          {item.file}
-
-                        </p>
-
-
-                        {
-                          item.line !== null &&
-                          item.line !== undefined && (
-
-                            <p>
-
-                              <strong>
-                                Line:
-                              </strong>{" "}
-
-                              {item.line}
-
-                            </p>
-
-                          )
-                        }
-
-
-                        {
-                          item.line_range && (
-
-                            <p>
-
-                              <strong>
-                                Lines:
-                              </strong>{" "}
-
-                              {
-                                item.line_range
-                              }
-
-                            </p>
-
-                          )
-                        }
-
-
-                        {
-                          item.description && (
-
-                            <p>
-
-                              <strong>
-                                Description:
-                              </strong>{" "}
-
-                              {
-                                item.description
-                              }
-
-                            </p>
-
-                          )
-                        }
-
-
-                        {
-                          item.evidence && (
-
-                            <p>
-
-                              <strong>
-                                Evidence:
-                              </strong>{" "}
-
-                              {
-                                item.evidence
-                              }
-
-                            </p>
-
-                          )
-                        }
-
-
-                        {
-                          item.impact && (
-
-                            <p>
-
-                              <strong>
-                                Impact:
-                              </strong>{" "}
-
-                              {
-                                item.impact
-                              }
-
-                            </p>
-
-                          )
-                        }
-
-
-                        {
-                          item.fix && (
-
-                            <p>
-
-                              <strong>
-                                Fix:
-                              </strong>{" "}
-
-                              {
-                                item.fix
-                              }
-
-                            </p>
-
-                          )
-                        }
-
-
-                        <p>
-
-                          <strong>
-                            Confidence:
-                          </strong>{" "}
-
-                          {
-                            item.confidence
-                          }%
-
+                          Errors identified during
+                          the analysis.
                         </p>
 
                       </div>
 
-                    )
-                  )
-
-                )
-            }
-
-
-            {/* =================================================
-                PERFORMANCE
-            ================================================= */}
-
-            {
-              review.performance && (
-
-                <>
-
-                  <h3>
-                    Performance
-                  </h3>
-
-
-                  <p>
+                    </div>
 
                     <strong>
-                      Time Complexity:
-                    </strong>{" "}
+                      {review.errors.length}
+                    </strong>
 
-                    {
-                      review.performance
-                        .time_complexity ||
-                      "Not determined"
-                    }
-
-                  </p>
+                  </div>
 
 
-                  <p>
+                  <div className="review-findings">
 
-                    <strong>
-                      Space Complexity:
-                    </strong>{" "}
+                    {review.errors.map(
+                      (item, index) => (
 
-                    {
-                      review.performance
-                        .space_complexity ||
-                      "Not determined"
-                    }
+                        <article
+                          className="finding-card"
+                          key={`${item.title}-${index}`}
+                        >
 
-                  </p>
+                          <div className="finding-top">
+
+                            <h4>
+                              {item.title}
+                            </h4>
+
+                            <span className="finding-type">
+                              {item.type}
+                            </span>
+
+                          </div>
 
 
-                  <h4>
-                    Performance Issues
-                  </h4>
+                          <div className="finding-meta">
+
+                            <span>
+                              {item.file}
+                            </span>
+
+                            {item.line && (
+                              <span>
+                                Line{" "}
+                                {item.line}
+                              </span>
+                            )}
+
+                          </div>
 
 
-                  {
-                    !review.performance
-                      .issues ||
-                    review.performance
-                      .issues.length === 0
+                          <p className="finding-description">
+                            {item.description}
+                          </p>
 
-                      ? (
 
-                        <p>
-                          No verified performance
-                          issues found.
-                        </p>
+                          {item.evidence && (
+                            <div className="finding-block">
+
+                              <span>
+                                EVIDENCE
+                              </span>
+
+                              <code>
+                                {item.evidence}
+                              </code>
+
+                            </div>
+                          )}
+
+
+                          {item.fix && (
+                            <div className="finding-fix">
+
+                              <strong>
+                                Recommended Fix
+                              </strong>
+
+                              <p>
+                                {item.fix}
+                              </p>
+
+                            </div>
+                          )}
+
+                        </article>
 
                       )
+                    )}
 
-                      : (
+                  </div>
 
-                        review.performance
-                          .issues.map(
-                            (
-                              issue,
-                              index
-                            ) => (
-
-                              <div
-                                key={index}
-                                style={{
-                                  marginBottom:
-                                    "25px",
-                                  padding:
-                                    "15px",
-                                  border:
-                                    "1px solid #444",
-                                  borderRadius:
-                                    "8px",
-                                }}
-                              >
-
-                                <h4>
-                                  {
-                                    issue.title
-                                  }
-                                </h4>
+                </section>
+              )}
 
 
-                                {
-                                  issue.description && (
+            {/* ================================================
+                SECURITY
+                ================================================ */}
 
-                                    <p>
+            {review.security &&
+              review.security.issues_found >
+                0 && (
 
-                                      <strong>
-                                        Description:
-                                      </strong>{" "}
+                <section className="review-detail-section">
 
-                                      {
-                                        issue.description
-                                      }
+                  <div className="review-detail-heading">
 
-                                    </p>
+                    <div>
 
-                                  )
-                                }
+                      <span className="detail-icon warning">
+                        !
+                      </span>
 
+                      <div>
 
-                                {
-                                  issue.file && (
+                        <h3>
+                          Security
+                        </h3>
 
-                                    <p>
+                        <p>
+                          Potential security risks
+                          identified by the AI reviewer.
+                        </p>
 
-                                      <strong>
-                                        File:
-                                      </strong>{" "}
+                      </div>
 
-                                      {
-                                        issue.file
-                                      }
+                    </div>
 
-                                    </p>
+                    <strong>
+                      {
+                        review.security
+                          .issues_found
+                      }
+                    </strong>
 
-                                  )
-                                }
-
-
-                                {
-                                  issue.line !==
-                                    null &&
-                                  issue.line !==
-                                    undefined && (
-
-                                    <p>
-
-                                      <strong>
-                                        Line:
-                                      </strong>{" "}
-
-                                      {
-                                        issue.line
-                                      }
-
-                                    </p>
-
-                                  )
-                                }
+                  </div>
 
 
-                                {
-                                  issue.line_range && (
+                  <div className="review-findings">
 
-                                    <p>
+                    {review.security.issues.map(
+                      (issue, index) => (
 
-                                      <strong>
-                                        Lines:
-                                      </strong>{" "}
+                        <article
+                          className="finding-card"
+                          key={`${issue.title}-${index}`}
+                        >
 
-                                      {
-                                        issue.line_range
-                                      }
+                          <div className="finding-top">
 
-                                    </p>
+                            <h4>
+                              {issue.title}
+                            </h4>
 
-                                  )
-                                }
+                            <span className="finding-type">
+                              Security
+                            </span>
 
-
-                                {
-                                  issue.evidence && (
-
-                                    <p>
-
-                                      <strong>
-                                        Evidence:
-                                      </strong>{" "}
-
-                                      {
-                                        issue.evidence
-                                      }
-
-                                    </p>
-
-                                  )
-                                }
+                          </div>
 
 
-                                {
-                                  issue.impact && (
+                          <p className="finding-description">
+                            {issue.description}
+                          </p>
 
-                                    <p>
+                        </article>
 
-                                      <strong>
-                                        Impact:
-                                      </strong>{" "}
+                      )
+                    )}
 
-                                      {
-                                        issue.impact
-                                      }
+                  </div>
 
-                                    </p>
-
-                                  )
-                                }
+                </section>
+              )}
 
 
-                                {
-                                  issue.suggestion && (
+            {/* ================================================
+                PERFORMANCE
+                ================================================ */}
 
-                                    <p>
+            {review.performance && (
 
-                                      <strong>
-                                        Suggestion:
-                                      </strong>{" "}
+              <section className="review-detail-section">
 
-                                      {
-                                        issue.suggestion
-                                      }
+                <div className="review-detail-heading">
 
-                                    </p>
+                  <div>
 
-                                  )
-                                }
+                    <span className="detail-icon info">
+                      ↗
+                    </span>
+
+                    <div>
+
+                      <h3>
+                        Performance
+                      </h3>
+
+                      <p>
+                        Complexity and performance
+                        concerns found in the project.
+                      </p>
+
+                    </div>
+
+                  </div>
+
+                  <strong>
+                    {
+                      review.performance
+                        .issues?.length || 0
+                    }
+                  </strong>
+
+                </div>
 
 
-                                <p>
+                <div className="complexity-grid">
 
-                                  <strong>
-                                    Confidence:
-                                  </strong>{" "}
+                  <div>
+                    <span>
+                      TIME COMPLEXITY
+                    </span>
 
+                    <strong>
+                      {review.performance
+                        .time_complexity ||
+                        "Not determined"}
+                    </strong>
+                  </div>
+
+
+                  <div>
+                    <span>
+                      SPACE COMPLEXITY
+                    </span>
+
+                    <strong>
+                      {review.performance
+                        .space_complexity ||
+                        "Not determined"}
+                    </strong>
+                  </div>
+
+                </div>
+
+
+                {review.performance
+                  .issues &&
+                  review.performance
+                    .issues.length > 0 && (
+
+                    <div className="review-findings">
+
+                      {review.performance.issues.map(
+                        (issue, index) => (
+
+                          <article
+                            className="finding-card"
+                            key={`${issue.title}-${index}`}
+                          >
+
+                            <div className="finding-top">
+
+                              <h4>
+                                {issue.title}
+                              </h4>
+
+                              {issue.confidence !==
+                                undefined && (
+                                <span className="finding-type">
                                   {
                                     issue.confidence
                                   }%
+                                </span>
+                              )}
 
+                            </div>
+
+
+                            <p className="finding-description">
+                              {issue.description}
+                            </p>
+
+
+                            {issue.file && (
+                              <div className="finding-meta">
+
+                                <span>
+                                  {issue.file}
+                                </span>
+
+                                {issue.line && (
+                                  <span>
+                                    Line{" "}
+                                    {issue.line}
+                                  </span>
+                                )}
+
+                              </div>
+                            )}
+
+
+                            {issue.impact && (
+                              <div className="finding-text">
+
+                                <strong>
+                                  Impact
+                                </strong>
+
+                                <p>
+                                  {issue.impact}
                                 </p>
 
                               </div>
-
-                            )
-                          )
-
-                      )
-                  }
-
-                </>
-
-              )
-            }
+                            )}
 
 
-            {/* =================================================
-                SECURITY
-            ================================================= */}
+                            {issue.suggestion && (
+                              <div className="finding-fix">
 
-            {
-              review.security && (
+                                <strong>
+                                  Recommendation
+                                </strong>
 
-                <>
+                                <p>
+                                  {issue.suggestion}
+                                </p>
 
-                  <h3>
-                    Security
-                  </h3>
+                              </div>
+                            )}
 
+                          </article>
 
-                  <p>
+                        )
+                      )}
 
-                    <strong>
-                      Issues Found:
-                    </strong>{" "}
+                    </div>
+                  )}
 
-                    {
-                      review.security
-                        .issues_found
-                    }
-
-                  </p>
+              </section>
+            )}
 
 
-                  {
-                    review.security
-                      .issues?.length > 0
-
-                      ? (
-
-                        <ul>
-
-                          {
-                            review.security
-                              .issues.map(
-                                (
-                                  issue,
-                                  index
-                                ) => (
-
-                                  <li
-                                    key={
-                                      index
-                                    }
-                                  >
-                                    {
-                                      issue
-                                    }
-                                  </li>
-
-                                )
-                              )
-                          }
-
-                        </ul>
-
-                      )
-
-                      : (
-
-                        <p>
-                          No verified security
-                          issues found.
-                        </p>
-
-                      )
-                  }
-
-                </>
-
-              )
-            }
-
-
-            {/* =================================================
+            {/* ================================================
                 CODE QUALITY
-            ================================================= */}
+                ================================================ */}
 
-            {
-              review.code_quality && (
+            {review.code_quality && (
 
-                <>
+              <section className="review-detail-section">
 
-                  <h3>
-                    Code Quality
-                  </h3>
+                <div className="review-detail-heading">
 
+                  <div>
 
-                  {
-                    review.code_quality
-                      .observations
-                      ?.length > 0
+                    <span className="detail-icon purple">
+                      ✦
+                    </span>
 
-                      ? (
+                    <div>
 
-                        <ul>
+                      <h3>
+                        Code Quality
+                      </h3>
 
-                          {
-                            review.code_quality
-                              .observations
-                              .map(
-                                (
-                                  item,
-                                  index
-                                ) => (
+                      <p>
+                        Readability, maintainability,
+                        and structural observations.
+                      </p>
 
-                                  <li
-                                    key={
-                                      index
-                                    }
-                                  >
-                                    {
-                                      item
-                                    }
-                                  </li>
+                    </div>
 
-                                )
-                              )
-                          }
-
-                        </ul>
-
-                      )
-
-                      : (
-
-                        <p>
-                          No code-quality
-                          observations reported.
-                        </p>
-
-                      )
-                  }
-
-
-                  <h3>
-                    Suggestions
-                  </h3>
-
-
-                  {
-                    review.code_quality
-                      .suggestions
-                      ?.length > 0
-
-                      ? (
-
-                        <ul>
-
-                          {
-                            review.code_quality
-                              .suggestions
-                              .map(
-                                (
-                                  item,
-                                  index
-                                ) => (
-
-                                  <li
-                                    key={
-                                      index
-                                    }
-                                  >
-                                    {
-                                      item
-                                    }
-                                  </li>
-
-                                )
-                              )
-                          }
-
-                        </ul>
-
-                      )
-
-                      : (
-
-                        <p>
-                          No code-quality
-                          suggestions reported.
-                        </p>
-
-                      )
-                  }
-
-                </>
-
-              )
-            }
-
-
-            {/* =================================================
-                KEY METHODS
-            ================================================= */}
-
-            {
-              review.key_methods
-                ?.length > 0 && (
-
-                <>
-
-                  <h3>
-                    Key Methods
-                  </h3>
-
-                  <ul>
-
-                    {
-                      review.key_methods.map(
-                        (
-                          method,
-                          index
-                        ) => (
-
-                          <li
-                            key={index}
-                          >
-                            {method}
-                          </li>
-
-                        )
-                      )
-                    }
-
-                  </ul>
-
-                </>
-
-              )
-            }
-
-
-            {/* =================================================
-                KEY CLASSES
-            ================================================= */}
-
-            {
-              review.key_classes
-                ?.length > 0 && (
-
-                <>
-
-                  <h3>
-                    Key Classes
-                  </h3>
-
-                  <ul>
-
-                    {
-                      review.key_classes.map(
-                        (
-                          item,
-                          index
-                        ) => (
-
-                          <li
-                            key={index}
-                          >
-                            {item}
-                          </li>
-
-                        )
-                      )
-                    }
-
-                  </ul>
-
-                </>
-
-              )
-            }
-
-
-            {/* =================================================
-                LIBRARIES
-            ================================================= */}
-
-            {
-              review.libraries
-                ?.length > 0 && (
-
-                <>
-
-                  <h3>
-                    Libraries
-                  </h3>
-
-                  <ul>
-
-                    {
-                      review.libraries.map(
-                        (
-                          library,
-                          index
-                        ) => (
-
-                          <li
-                            key={index}
-                          >
-                            {library}
-                          </li>
-
-                        )
-                      )
-                    }
-
-                  </ul>
-
-                </>
-
-              )
-            }
-
-
-            {/* =================================================
-                EXPECTED OUTPUT
-            ================================================= */}
-
-            {
-              review.expected_output && (
-
-                <>
-
-                  <h3>
-                    Expected Output
-                  </h3>
-
-
-                  <pre
-                    style={{
-                      whiteSpace:
-                        "pre-wrap",
-                      overflowWrap:
-                        "break-word",
-                    }}
-                  >
-
-                    {
-                      review.expected_output
-                    }
-
-                  </pre>
-
-                </>
-
-              )
-            }
-
-
-            {/* =================================================
-                SCORE
-            ================================================= */}
-
-            {
-              review.score !== null &&
-              review.score !== undefined && (
-
-                <p>
+                  </div>
 
                   <strong>
-                    Score:
-                  </strong>{" "}
+                    {(review.code_quality
+                      .observations
+                      ?.length || 0) +
+                      (review.code_quality
+                        .suggestions
+                        ?.length || 0)}
+                  </strong>
 
-                  {
-                    review.score
-                  }/10
-
-                </p>
-
-              )
-            }
+                </div>
 
 
-            {/* =================================================
-                CONFIDENCE
-            ================================================= */}
+                <div className="quality-grid">
 
-            <p>
+                  <div className="quality-column">
 
-              <strong>
-                Analysis Confidence:
-              </strong>{" "}
+                    <span className="quality-column-title">
+                      OBSERVATIONS
+                    </span>
 
-              {
-                review.confidence
-              }%
+                    {review.code_quality
+                      .observations
+                      ?.map(
+                        (item, index) => (
 
-            </p>
+                          <div
+                            className="quality-item"
+                            key={index}
+                          >
+
+                            <span>
+                              ✓
+                            </span>
+
+                            <div>
+
+                              <strong>
+                                {item.title ||
+                                  item.type ||
+                                  "Observation"}
+                              </strong>
+
+                              <p>
+                                {
+                                  item.description
+                                }
+                              </p>
+
+                            </div>
+
+                          </div>
+
+                        )
+                      )}
+
+                  </div>
 
 
-            {/* =================================================
-                FINAL VERDICT
-            ================================================= */}
+                  <div className="quality-column">
 
-            {
-              review.final_verdict && (
+                    <span className="quality-column-title">
+                      SUGGESTIONS
+                    </span>
 
-                <>
+                    {review.code_quality
+                      .suggestions
+                      ?.map(
+                        (item, index) => (
 
-                  <h3>
-                    Final Verdict
-                  </h3>
+                          <div
+                            className="quality-item"
+                            key={index}
+                          >
 
-                  <p>
+                            <span>
+                              →
+                            </span>
+
+                            <div>
+
+                              <strong>
+                                {item.title ||
+                                  item.type ||
+                                  "Suggestion"}
+                              </strong>
+
+                              <p>
+                                {
+                                  item.description
+                                }
+                              </p>
+
+                            </div>
+
+                          </div>
+
+                        )
+                      )}
+
+                  </div>
+
+                </div>
+
+              </section>
+            )}
+
+
+            {/* ================================================
+                PROJECT DETAILS
+                ================================================ */}
+
+            <section className="review-detail-section">
+
+              <div className="review-detail-heading">
+
+                <div>
+
+                  <span className="detail-icon info">
+                    #
+                  </span>
+
+                  <div>
+
+                    <h3>
+                      Project Details
+                    </h3>
+
+                    <p>
+                      Code elements identified during
+                      the analysis.
+                    </p>
+
+                  </div>
+
+                </div>
+
+              </div>
+
+
+              <div className="project-detail-grid">
+
+                <div className="project-detail-box">
+
+                  <span>
+                    FILES ANALYZED
+                  </span>
+
+                  <strong>
                     {
-                      review.final_verdict
+                      review.files_analyzed
+                        ?.length || 0
                     }
-                  </p>
+                  </strong>
 
-                </>
+                  {review.files_analyzed
+                    ?.slice(0, 5)
+                    .map(
+                      (file) => (
+                        <small
+                          key={
+                            file.path
+                          }
+                        >
+                          {file.file_name}
+                        </small>
+                      )
+                    )}
 
-              )
-            }
+                </div>
 
-          </div>
 
-        )
-      }
+                <div className="project-detail-box">
 
-    </div>
+                  <span>
+                    KEY METHODS
+                  </span>
+
+                  <strong>
+                    {
+                      review.key_methods
+                        ?.length || 0
+                    }
+                  </strong>
+
+                  {review.key_methods
+                    ?.slice(0, 5)
+                    .map(
+                      (method) => (
+                        <small
+                          key={method}
+                        >
+                          {method}
+                        </small>
+                      )
+                    )}
+
+                </div>
+
+
+                <div className="project-detail-box">
+
+                  <span>
+                    KEY CLASSES
+                  </span>
+
+                  <strong>
+                    {
+                      review.key_classes
+                        ?.length || 0
+                    }
+                  </strong>
+
+                  {review.key_classes
+                    ?.slice(0, 5)
+                    .map(
+                      (item) => (
+                        <small
+                          key={item}
+                        >
+                          {item}
+                        </small>
+                      )
+                    )}
+
+                </div>
+
+
+                <div className="project-detail-box">
+
+                  <span>
+                    LIBRARIES
+                  </span>
+
+                  <strong>
+                    {
+                      review.libraries
+                        ?.length || 0
+                    }
+                  </strong>
+
+                  {review.libraries
+                    ?.slice(0, 5)
+                    .map(
+                      (library) => (
+                        <small
+                          key={library}
+                        >
+                          {library}
+                        </small>
+                      )
+                    )}
+
+                </div>
+
+              </div>
+
+            </section>
+
+
+            {/* ================================================
+                REVIEW QUESTION
+                ================================================ */}
+
+            <section className="review-question-footer">
+
+              <span>
+                REVIEW QUESTION
+              </span>
+
+              <p>
+                {review.question}
+              </p>
+
+            </section>
+
+          </section>
+        )}
+
+      </div>
+
+    </main>
   );
 }
-
 
 export default Review;

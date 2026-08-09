@@ -182,6 +182,17 @@ class PerformanceInfo(BaseModel):
 
 
 # ============================================================
+# Security Finding
+# ============================================================
+
+class SecurityFinding(BaseModel):
+
+    title: str
+
+    description: str
+
+
+# ============================================================
 # Security
 # ============================================================
 
@@ -192,7 +203,9 @@ class SecurityInfo(BaseModel):
         ge=0
     )
 
-    issues: List[str] = Field(
+    issues: List[
+        SecurityFinding
+    ] = Field(
         default_factory=list
     )
 
@@ -203,7 +216,7 @@ class SecurityInfo(BaseModel):
 
 class CodeQualityFinding(BaseModel):
 
-    type: str
+    title: str
 
     description: str
 
