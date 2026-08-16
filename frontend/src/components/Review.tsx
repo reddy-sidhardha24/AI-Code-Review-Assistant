@@ -128,8 +128,7 @@ interface ReviewData {
 function getSeverityClass(
   severity: string
 ): string {
-  const value =
-    severity.toLowerCase();
+  const value = severity.toLowerCase();
 
   if (value === "critical") {
     return "severity-critical";
@@ -164,6 +163,14 @@ function getLanguageLabel(
   }
 
   return languages.join(", ");
+}
+
+function safeCount(
+  value?: unknown
+): number {
+  return Array.isArray(value)
+    ? value.length
+    : 0;
 }
 
 /* ============================================================
@@ -216,15 +223,9 @@ function Review() {
         response.data?.review
       ) {
         const reviewData =
-          response.data
-            .review as ReviewData;
+          response.data.review as ReviewData;
 
         setReview(reviewData);
-
-        /*
-         * Save completed review for
-         * Dashboard + History.
-         */
 
         saveReviewToHistory(
           reviewData,
@@ -246,8 +247,7 @@ function Review() {
 
       if (backendError) {
         setError(
-          typeof backendError ===
-            "string"
+          typeof backendError === "string"
             ? backendError
             : "The review request failed."
         );
@@ -278,6 +278,7 @@ function Review() {
       event.key === "Enter" &&
       event.ctrlKey
     ) {
+      event.preventDefault();
       askQuestion();
     }
   };
@@ -289,6 +290,7 @@ function Review() {
   const clearReview = () => {
     setReview(null);
     setError("");
+    setQuestion("");
   };
 
   /* ==========================================================
@@ -381,6 +383,7 @@ function Review() {
             </span>
 
             <button
+              type="button"
               className="review-analyze-button"
               onClick={askQuestion}
               disabled={loading}
@@ -412,6 +415,7 @@ function Review() {
             </span>
 
             <button
+              type="button"
               onClick={() =>
                 setQuestion(
                   "Perform a complete project-wide review covering bugs, security, performance, and code quality."
@@ -423,6 +427,7 @@ function Review() {
             </button>
 
             <button
+              type="button"
               onClick={() =>
                 setQuestion(
                   "Find all bugs and runtime errors in the project."
@@ -434,6 +439,7 @@ function Review() {
             </button>
 
             <button
+              type="button"
               onClick={() =>
                 setQuestion(
                   "Perform a security review and identify security vulnerabilities."
@@ -445,6 +451,7 @@ function Review() {
             </button>
 
             <button
+              type="button"
               onClick={() =>
                 setQuestion(
                   "Analyze the project's performance and identify performance bottlenecks."
@@ -456,6 +463,7 @@ function Review() {
             </button>
 
             <button
+              type="button"
               onClick={() =>
                 setQuestion(
                   "Review the code quality, readability, maintainability, and architecture."
@@ -574,23 +582,20 @@ function Review() {
 
                 <p>
                   {getLanguageLabel(
-                    review.project
-                      ?.languages || []
+                    review.project?.languages || []
                   )}
                   {" • "}
-                  {review.project
-                    ?.total_files || 0}{" "}
+                  {review.project?.total_files || 0}{" "}
                   files
                   {" • "}
-                  {review.project
-                    ?.total_lines || 0}{" "}
+                  {review.project?.total_lines || 0}{" "}
                   lines
                 </p>
 
               </div>
 
-
               <button
+                type="button"
                 className="review-clear-button"
                 onClick={clearReview}
               >
@@ -604,27 +609,24 @@ function Review() {
                 REVIEW TYPES
                 ================================================ */}
 
-            {review.review_types &&
-              review.review_types.length >
-                0 && (
+            {review.review_types?.length > 0 && (
 
-                <div className="review-type-list">
+              <div className="review-type-list">
 
-                  {review.review_types.map(
-                    (type) => (
-                      <span
-                        key={type}
-                        className="review-type-badge"
-                      >
-                        {formatReviewType(
-                          type
-                        )}
-                      </span>
-                    )
-                  )}
+                {review.review_types.map(
+                  (type) => (
+                    <span
+                      key={type}
+                      className="review-type-badge"
+                    >
+                      {formatReviewType(type)}
+                    </span>
+                  )
+                )}
 
-                </div>
-              )}
+              </div>
+
+            )}
 
 
             {/* ================================================
@@ -645,7 +647,7 @@ function Review() {
 
                 <p>
                   {review.answer_summary ||
-                    "No summary was returned."}
+                    "The review completed successfully. See the findings below for the detailed analysis."}
                 </p>
 
               </div>
@@ -666,8 +668,7 @@ function Review() {
                 </span>
 
                 <strong className="stat-red">
-                  {review.bugs?.length ||
-                    0}
+                  {safeCount(review.bugs)}
                 </strong>
 
                 <small>
@@ -684,9 +685,7 @@ function Review() {
                 </span>
 
                 <strong className="stat-yellow">
-                  {review.security
-                    ?.issues_found ||
-                    0}
+                  {review.security?.issues_found || 0}
                 </strong>
 
                 <small>
@@ -703,9 +702,9 @@ function Review() {
                 </span>
 
                 <strong className="stat-blue">
-                  {review.performance
-                    ?.issues?.length ||
-                    0}
+                  {safeCount(
+                    review.performance?.issues
+                  )}
                 </strong>
 
                 <small>
@@ -722,12 +721,12 @@ function Review() {
                 </span>
 
                 <strong className="stat-purple">
-                  {(review.code_quality
-                    ?.observations
-                    ?.length || 0) +
-                    (review.code_quality
-                      ?.suggestions
-                      ?.length || 0)}
+                  {safeCount(
+                    review.code_quality?.observations
+                  ) +
+                    safeCount(
+                      review.code_quality?.suggestions
+                    )}
                 </strong>
 
                 <small>
@@ -777,7 +776,7 @@ function Review() {
 
               <p>
                 {review.final_verdict ||
-                  "No final verdict was provided."}
+                  "The project review completed successfully. Review the findings above and address the highest-severity issues first."}
               </p>
 
             </section>
@@ -787,279 +786,307 @@ function Review() {
                 BUGS
                 ================================================ */}
 
-            {review.bugs &&
-              review.bugs.length > 0 && (
+            {review.bugs?.length > 0 && (
 
-                <section className="review-detail-section">
+              <section className="review-detail-section">
 
-                  <div className="review-detail-heading">
+                <div className="review-detail-heading">
+
+                  <div>
+
+                    <span className="detail-icon danger">
+                      !
+                    </span>
 
                     <div>
 
-                      <span className="detail-icon danger">
-                        !
-                      </span>
+                      <h3>
+                        Bugs & Runtime Issues
+                      </h3>
 
-                      <div>
-
-                        <h3>
-                          Bugs & Runtime Issues
-                        </h3>
-
-                        <p>
-                          Confirmed and potential
-                          problems detected in the
-                          project.
-                        </p>
-
-                      </div>
+                      <p>
+                        Confirmed and potential
+                        problems detected in the
+                        project.
+                      </p>
 
                     </div>
 
-                    <strong>
-                      {review.bugs.length}
-                    </strong>
-
                   </div>
 
+                  <strong>
+                    {review.bugs.length}
+                  </strong>
 
-                  <div className="review-findings">
+                </div>
 
-                    {review.bugs.map(
-                      (bug, index) => (
 
-                        <article
-                          className="finding-card"
-                          key={`${bug.title}-${index}`}
-                        >
+                <div className="review-findings">
 
-                          <div className="finding-top">
+                  {review.bugs.map(
+                    (bug, index) => (
 
-                            <h4>
-                              {bug.title}
-                            </h4>
+                      <article
+                        className="finding-card"
+                        key={`${bug.title}-${index}`}
+                      >
 
-                            <span
-                              className={`severity-badge ${getSeverityClass(
-                                bug.severity
-                              )}`}
-                            >
-                              {bug.severity}
+                        <div className="finding-top">
+
+                          <h4>
+                            {bug.title}
+                          </h4>
+
+                          <span
+                            className={`severity-badge ${getSeverityClass(
+                              bug.severity
+                            )}`}
+                          >
+                            {bug.severity}
+                          </span>
+
+                        </div>
+
+
+                        <div className="finding-meta">
+
+                          <span>
+                            {bug.file}
+                          </span>
+
+                          {bug.line != null && (
+                            <span>
+                              Line {bug.line}
                             </span>
+                          )}
+
+                          {bug.line_range && (
+                            <span>
+                              Lines {bug.line_range}
+                            </span>
+                          )}
+
+                          <span>
+                            {bug.type}
+                          </span>
+
+                        </div>
+
+
+                        <p className="finding-description">
+                          {bug.description}
+                        </p>
+
+
+                        {bug.evidence && (
+
+                          <div className="finding-block">
+
+                            <span>
+                              EVIDENCE
+                            </span>
+
+                            <code>
+                              {bug.evidence}
+                            </code>
 
                           </div>
 
+                        )}
 
-                          <div className="finding-meta">
 
-                            <span>
-                              {bug.file}
-                            </span>
+                        {bug.impact && (
 
-                            {bug.line && (
-                              <span>
-                                Line{" "}
-                                {bug.line}
-                              </span>
-                            )}
+                          <div className="finding-text">
 
-                            {bug.line_range && (
-                              <span>
-                                Lines{" "}
-                                {
-                                  bug.line_range
-                                }
-                              </span>
-                            )}
+                            <strong>
+                              Impact
+                            </strong>
 
-                            <span>
-                              {bug.type}
-                            </span>
+                            <p>
+                              {bug.impact}
+                            </p>
 
                           </div>
 
-
-                          <p className="finding-description">
-                            {bug.description}
-                          </p>
+                        )}
 
 
-                          {bug.evidence && (
-                            <div className="finding-block">
+                        {bug.fix && (
 
-                              <span>
-                                EVIDENCE
-                              </span>
+                          <div className="finding-fix">
 
-                              <code>
-                                {bug.evidence}
-                              </code>
+                            <strong>
+                              Recommended Fix
+                            </strong>
 
-                            </div>
-                          )}
+                            <p>
+                              {bug.fix}
+                            </p>
 
+                          </div>
 
-                          {bug.impact && (
-                            <div className="finding-text">
+                        )}
 
-                              <strong>
-                                Impact
-                              </strong>
+                      </article>
 
-                              <p>
-                                {bug.impact}
-                              </p>
+                    )
+                  )}
 
-                            </div>
-                          )}
+                </div>
 
+              </section>
 
-                          {bug.fix && (
-                            <div className="finding-fix">
-
-                              <strong>
-                                Recommended Fix
-                              </strong>
-
-                              <p>
-                                {bug.fix}
-                              </p>
-
-                            </div>
-                          )}
-
-                        </article>
-
-                      )
-                    )}
-
-                  </div>
-
-                </section>
-              )}
+            )}
 
 
             {/* ================================================
                 ERRORS
                 ================================================ */}
 
-            {review.errors &&
-              review.errors.length > 0 && (
+            {review.errors?.length > 0 && (
 
-                <section className="review-detail-section">
+              <section className="review-detail-section">
 
-                  <div className="review-detail-heading">
+                <div className="review-detail-heading">
+
+                  <div>
+
+                    <span className="detail-icon danger">
+                      !
+                    </span>
 
                     <div>
 
-                      <span className="detail-icon danger">
-                        !
-                      </span>
+                      <h3>
+                        Errors
+                      </h3>
 
-                      <div>
-
-                        <h3>
-                          Errors
-                        </h3>
-
-                        <p>
-                          Errors identified during
-                          the analysis.
-                        </p>
-
-                      </div>
+                      <p>
+                        Errors identified during
+                        the analysis.
+                      </p>
 
                     </div>
 
-                    <strong>
-                      {review.errors.length}
-                    </strong>
-
                   </div>
 
+                  <strong>
+                    {review.errors.length}
+                  </strong>
 
-                  <div className="review-findings">
+                </div>
 
-                    {review.errors.map(
-                      (item, index) => (
 
-                        <article
-                          className="finding-card"
-                          key={`${item.title}-${index}`}
-                        >
+                <div className="review-findings">
 
-                          <div className="finding-top">
+                  {review.errors.map(
+                    (item, index) => (
 
-                            <h4>
-                              {item.title}
-                            </h4>
+                      <article
+                        className="finding-card"
+                        key={`${item.title}-${index}`}
+                      >
 
-                            <span className="finding-type">
-                              {item.type}
+                        <div className="finding-top">
+
+                          <h4>
+                            {item.title}
+                          </h4>
+
+                          <span className="finding-type">
+                            {item.type}
+                          </span>
+
+                        </div>
+
+
+                        <div className="finding-meta">
+
+                          <span>
+                            {item.file}
+                          </span>
+
+                          {item.line != null && (
+                            <span>
+                              Line {item.line}
                             </span>
+                          )}
 
-                          </div>
+                          {item.line_range && (
+                            <span>
+                              Lines {item.line_range}
+                            </span>
+                          )}
+
+                        </div>
 
 
-                          <div className="finding-meta">
+                        <p className="finding-description">
+                          {item.description}
+                        </p>
+
+
+                        {item.evidence && (
+
+                          <div className="finding-block">
 
                             <span>
-                              {item.file}
+                              EVIDENCE
                             </span>
 
-                            {item.line && (
-                              <span>
-                                Line{" "}
-                                {item.line}
-                              </span>
-                            )}
+                            <code>
+                              {item.evidence}
+                            </code>
 
                           </div>
 
-
-                          <p className="finding-description">
-                            {item.description}
-                          </p>
+                        )}
 
 
-                          {item.evidence && (
-                            <div className="finding-block">
+                        {item.impact && (
 
-                              <span>
-                                EVIDENCE
-                              </span>
+                          <div className="finding-text">
 
-                              <code>
-                                {item.evidence}
-                              </code>
+                            <strong>
+                              Impact
+                            </strong>
 
-                            </div>
-                          )}
+                            <p>
+                              {item.impact}
+                            </p>
+
+                          </div>
+
+                        )}
 
 
-                          {item.fix && (
-                            <div className="finding-fix">
+                        {item.fix && (
 
-                              <strong>
-                                Recommended Fix
-                              </strong>
+                          <div className="finding-fix">
 
-                              <p>
-                                {item.fix}
-                              </p>
+                            <strong>
+                              Recommended Fix
+                            </strong>
 
-                            </div>
-                          )}
+                            <p>
+                              {item.fix}
+                            </p>
 
-                        </article>
+                          </div>
 
-                      )
-                    )}
+                        )}
 
-                  </div>
+                      </article>
 
-                </section>
-              )}
+                    )
+                  )}
+
+                </div>
+
+              </section>
+
+            )}
 
 
             {/* ================================================
@@ -1067,8 +1094,7 @@ function Review() {
                 ================================================ */}
 
             {review.security &&
-              review.security.issues_found >
-                0 && (
+              review.security.issues_found > 0 && (
 
                 <section className="review-detail-section">
 
@@ -1096,10 +1122,7 @@ function Review() {
                     </div>
 
                     <strong>
-                      {
-                        review.security
-                          .issues_found
-                      }
+                      {review.security.issues_found}
                     </strong>
 
                   </div>
@@ -1140,6 +1163,7 @@ function Review() {
                   </div>
 
                 </section>
+
               )}
 
 
@@ -1176,8 +1200,7 @@ function Review() {
 
                   <strong>
                     {
-                      review.performance
-                        .issues?.length || 0
+                      review.performance.issues?.length || 0
                     }
                   </strong>
 
@@ -1187,127 +1210,156 @@ function Review() {
                 <div className="complexity-grid">
 
                   <div>
+
                     <span>
                       TIME COMPLEXITY
                     </span>
 
                     <strong>
-                      {review.performance
-                        .time_complexity ||
+                      {review.performance.time_complexity ||
                         "Not determined"}
                     </strong>
+
                   </div>
 
 
                   <div>
+
                     <span>
                       SPACE COMPLEXITY
                     </span>
 
                     <strong>
-                      {review.performance
-                        .space_complexity ||
+                      {review.performance.space_complexity ||
                         "Not determined"}
                     </strong>
+
                   </div>
 
                 </div>
 
 
-                {review.performance
-                  .issues &&
-                  review.performance
-                    .issues.length > 0 && (
+                {review.performance.issues?.length > 0 && (
 
-                    <div className="review-findings">
+                  <div className="review-findings">
 
-                      {review.performance.issues.map(
-                        (issue, index) => (
+                    {review.performance.issues.map(
+                      (issue, index) => (
 
-                          <article
-                            className="finding-card"
-                            key={`${issue.title}-${index}`}
-                          >
+                        <article
+                          className="finding-card"
+                          key={`${issue.title}-${index}`}
+                        >
 
-                            <div className="finding-top">
+                          <div className="finding-top">
 
-                              <h4>
-                                {issue.title}
-                              </h4>
+                            <h4>
+                              {issue.title}
+                            </h4>
 
-                              {issue.confidence !==
-                                undefined && (
-                                <span className="finding-type">
-                                  {
-                                    issue.confidence
-                                  }%
+                            {issue.confidence !==
+                              undefined && (
+
+                              <span className="finding-type">
+                                {issue.confidence}%
+                              </span>
+
+                            )}
+
+                          </div>
+
+
+                          <p className="finding-description">
+                            {issue.description}
+                          </p>
+
+
+                          {issue.file && (
+
+                            <div className="finding-meta">
+
+                              <span>
+                                {issue.file}
+                              </span>
+
+                              {issue.line != null && (
+                                <span>
+                                  Line {issue.line}
+                                </span>
+                              )}
+
+                              {issue.line_range && (
+                                <span>
+                                  Lines {issue.line_range}
                                 </span>
                               )}
 
                             </div>
 
-
-                            <p className="finding-description">
-                              {issue.description}
-                            </p>
+                          )}
 
 
-                            {issue.file && (
-                              <div className="finding-meta">
+                          {issue.evidence && (
 
-                                <span>
-                                  {issue.file}
-                                </span>
+                            <div className="finding-block">
 
-                                {issue.line && (
-                                  <span>
-                                    Line{" "}
-                                    {issue.line}
-                                  </span>
-                                )}
+                              <span>
+                                EVIDENCE
+                              </span>
 
-                              </div>
-                            )}
+                              <code>
+                                {issue.evidence}
+                              </code>
 
+                            </div>
 
-                            {issue.impact && (
-                              <div className="finding-text">
-
-                                <strong>
-                                  Impact
-                                </strong>
-
-                                <p>
-                                  {issue.impact}
-                                </p>
-
-                              </div>
-                            )}
+                          )}
 
 
-                            {issue.suggestion && (
-                              <div className="finding-fix">
+                          {issue.impact && (
 
-                                <strong>
-                                  Recommendation
-                                </strong>
+                            <div className="finding-text">
 
-                                <p>
-                                  {issue.suggestion}
-                                </p>
+                              <strong>
+                                Impact
+                              </strong>
 
-                              </div>
-                            )}
+                              <p>
+                                {issue.impact}
+                              </p>
 
-                          </article>
+                            </div>
 
-                        )
-                      )}
+                          )}
 
-                    </div>
-                  )}
+
+                          {issue.suggestion && (
+
+                            <div className="finding-fix">
+
+                              <strong>
+                                Recommendation
+                              </strong>
+
+                              <p>
+                                {issue.suggestion}
+                              </p>
+
+                            </div>
+
+                          )}
+
+                        </article>
+
+                      )
+                    )}
+
+                  </div>
+
+                )}
 
               </section>
+
             )}
 
 
@@ -1343,12 +1395,8 @@ function Review() {
                   </div>
 
                   <strong>
-                    {(review.code_quality
-                      .observations
-                      ?.length || 0) +
-                      (review.code_quality
-                        .suggestions
-                        ?.length || 0)}
+                    {(review.code_quality.observations?.length || 0) +
+                      (review.code_quality.suggestions?.length || 0)}
                   </strong>
 
                 </div>
@@ -1362,9 +1410,9 @@ function Review() {
                       OBSERVATIONS
                     </span>
 
-                    {review.code_quality
-                      .observations
-                      ?.map(
+                    {review.code_quality.observations?.length > 0 ? (
+
+                      review.code_quality.observations.map(
                         (item, index) => (
 
                           <div
@@ -1385,9 +1433,7 @@ function Review() {
                               </strong>
 
                               <p>
-                                {
-                                  item.description
-                                }
+                                {item.description}
                               </p>
 
                             </div>
@@ -1395,7 +1441,15 @@ function Review() {
                           </div>
 
                         )
-                      )}
+                      )
+
+                    ) : (
+
+                      <p className="quality-empty">
+                        No major observations returned.
+                      </p>
+
+                    )}
 
                   </div>
 
@@ -1406,9 +1460,9 @@ function Review() {
                       SUGGESTIONS
                     </span>
 
-                    {review.code_quality
-                      .suggestions
-                      ?.map(
+                    {review.code_quality.suggestions?.length > 0 ? (
+
+                      review.code_quality.suggestions.map(
                         (item, index) => (
 
                           <div
@@ -1429,9 +1483,7 @@ function Review() {
                               </strong>
 
                               <p>
-                                {
-                                  item.description
-                                }
+                                {item.description}
                               </p>
 
                             </div>
@@ -1439,13 +1491,22 @@ function Review() {
                           </div>
 
                         )
-                      )}
+                      )
+
+                    ) : (
+
+                      <p className="quality-empty">
+                        No suggestions returned.
+                      </p>
+
+                    )}
 
                   </div>
 
                 </div>
 
               </section>
+
             )}
 
 
@@ -1483,6 +1544,8 @@ function Review() {
 
               <div className="project-detail-grid">
 
+                {/* FILES */}
+
                 <div className="project-detail-box">
 
                   <span>
@@ -1490,28 +1553,28 @@ function Review() {
                   </span>
 
                   <strong>
-                    {
+                    {safeCount(
                       review.files_analyzed
-                        ?.length || 0
-                    }
+                    )}
                   </strong>
 
-                  {review.files_analyzed
-                    ?.slice(0, 5)
-                    .map(
-                      (file) => (
-                        <small
-                          key={
-                            file.path
-                          }
-                        >
-                          {file.file_name}
-                        </small>
-                      )
-                    )}
+                  {review.files_analyzed?.map(
+                    (file, index) => (
+
+                      <small
+                        key={`${file.path}-${index}`}
+                        title={file.path}
+                      >
+                        {file.file_name}
+                      </small>
+
+                    )
+                  )}
 
                 </div>
 
+
+                {/* METHODS */}
 
                 <div className="project-detail-box">
 
@@ -1520,26 +1583,27 @@ function Review() {
                   </span>
 
                   <strong>
-                    {
+                    {safeCount(
                       review.key_methods
-                        ?.length || 0
-                    }
+                    )}
                   </strong>
 
-                  {review.key_methods
-                    ?.slice(0, 5)
-                    .map(
-                      (method) => (
-                        <small
-                          key={method}
-                        >
-                          {method}
-                        </small>
-                      )
-                    )}
+                  {review.key_methods?.map(
+                    (method, index) => (
+
+                      <small
+                        key={`${method}-${index}`}
+                      >
+                        {method}
+                      </small>
+
+                    )
+                  )}
 
                 </div>
 
+
+                {/* CLASSES */}
 
                 <div className="project-detail-box">
 
@@ -1548,26 +1612,27 @@ function Review() {
                   </span>
 
                   <strong>
-                    {
+                    {safeCount(
                       review.key_classes
-                        ?.length || 0
-                    }
+                    )}
                   </strong>
 
-                  {review.key_classes
-                    ?.slice(0, 5)
-                    .map(
-                      (item) => (
-                        <small
-                          key={item}
-                        >
-                          {item}
-                        </small>
-                      )
-                    )}
+                  {review.key_classes?.map(
+                    (item, index) => (
+
+                      <small
+                        key={`${item}-${index}`}
+                      >
+                        {item}
+                      </small>
+
+                    )
+                  )}
 
                 </div>
 
+
+                {/* LIBRARIES */}
 
                 <div className="project-detail-box">
 
@@ -1576,23 +1641,22 @@ function Review() {
                   </span>
 
                   <strong>
-                    {
+                    {safeCount(
                       review.libraries
-                        ?.length || 0
-                    }
+                    )}
                   </strong>
 
-                  {review.libraries
-                    ?.slice(0, 5)
-                    .map(
-                      (library) => (
-                        <small
-                          key={library}
-                        >
-                          {library}
-                        </small>
-                      )
-                    )}
+                  {review.libraries?.map(
+                    (library, index) => (
+
+                      <small
+                        key={`${library}-${index}`}
+                      >
+                        {library}
+                      </small>
+
+                    )
+                  )}
 
                 </div>
 
@@ -1618,6 +1682,7 @@ function Review() {
             </section>
 
           </section>
+
         )}
 
       </div>

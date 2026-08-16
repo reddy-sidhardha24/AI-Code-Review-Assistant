@@ -6,9 +6,10 @@ function Home() {
 
       {/* =====================================================
           HERO
-      ===================================================== */}
+          ===================================================== */}
 
       <section className="home-hero">
+
         <div className="container">
 
           <div className="home-hero-content">
@@ -25,35 +26,44 @@ function Home() {
             </h1>
 
             <p className="home-description">
-              Upload your codebase and let AI analyze bugs, security
-              vulnerabilities, performance issues, and code quality
-              using retrieval-augmented generation.
+              Analyze an entire codebase or paste a
+              single source file. AI retrieves relevant
+              code context and identifies bugs, security
+              vulnerabilities, performance issues, and
+              code-quality problems.
             </p>
 
             <div className="home-trust">
+
               <span>
                 <span className="trust-dot"></span>
-                Your code stays local
+                Local project processing
               </span>
 
               <span>•</span>
 
-              <span>RAG-powered analysis</span>
+              <span>
+                RAG-powered analysis
+              </span>
 
               <span>•</span>
 
-              <span>AI-assisted review</span>
+              <span>
+                Structured AI review
+              </span>
+
             </div>
 
           </div>
 
         </div>
+
       </section>
 
 
       {/* =====================================================
           ANALYSIS SECTION
-      ===================================================== */}
+          ===================================================== */}
 
       <section className="analysis-section">
 
@@ -62,24 +72,27 @@ function Home() {
           <div className="analysis-header">
 
             <div>
+
               <div className="section-label">
-                ANALYZE YOUR CODEBASE
+                ANALYZE YOUR CODE
               </div>
 
               <h2>
-                Start with your project
+                Start your analysis
               </h2>
 
               <p>
-                Upload a complete project or select individual
-                source files for analysis.
+                Upload a complete project, select
+                individual source files, or paste code
+                for a quick review.
               </p>
+
             </div>
 
           </div>
 
 
-          {/* Upload component */}
+          {/* Upload / Paste Component */}
 
           <Upload />
 
@@ -97,12 +110,16 @@ function Home() {
               </div>
 
               <div>
-                <h3>Bug Detection</h3>
+
+                <h3>
+                  Bug Detection
+                </h3>
 
                 <p>
                   Identify runtime errors, logical bugs,
                   and dangerous code patterns.
                 </p>
+
               </div>
 
             </div>
@@ -115,12 +132,16 @@ function Home() {
               </div>
 
               <div>
-                <h3>Security Analysis</h3>
+
+                <h3>
+                  Security Analysis
+                </h3>
 
                 <p>
-                  Detect hardcoded secrets, unsafe practices,
-                  and common vulnerabilities.
+                  Detect hardcoded secrets, unsafe
+                  practices, and common vulnerabilities.
                 </p>
+
               </div>
 
             </div>
@@ -133,12 +154,16 @@ function Home() {
               </div>
 
               <div>
-                <h3>Performance</h3>
+
+                <h3>
+                  Performance
+                </h3>
 
                 <p>
                   Find inefficient algorithms, operations,
                   and scalability problems.
                 </p>
+
               </div>
 
             </div>
@@ -151,12 +176,16 @@ function Home() {
               </div>
 
               <div>
-                <h3>Code Quality</h3>
+
+                <h3>
+                  Code Quality
+                </h3>
 
                 <p>
                   Improve readability, maintainability,
                   and overall code structure.
                 </p>
+
               </div>
 
             </div>
@@ -199,12 +228,12 @@ function Home() {
               </div>
 
               <h3>
-                Upload
+                Provide Code
               </h3>
 
               <p>
-                Provide your project ZIP or individual
-                source files.
+                Upload a project, select source files,
+                or paste a single file.
               </p>
 
             </div>
@@ -224,8 +253,8 @@ function Home() {
               </h3>
 
               <p>
-                Code is chunked and converted into
-                semantic embeddings.
+                Code is loaded, chunked, and converted
+                into semantic embeddings.
               </p>
 
             </div>
@@ -245,8 +274,8 @@ function Home() {
               </h3>
 
               <p>
-                RAG retrieves the most relevant code
-                context for your question.
+                RAG retrieves relevant code context
+                for the review question.
               </p>
 
             </div>
@@ -267,7 +296,118 @@ function Home() {
 
               <p>
                 AI generates structured findings
-                from the retrieved context.
+                from the retrieved code.
+              </p>
+
+            </div>
+
+          </div>
+
+        </div>
+
+      </section>
+
+
+      {/* =====================================================
+          TECHNICAL ARCHITECTURE
+          ===================================================== */}
+
+      <section className="workflow-section">
+
+        <div className="container">
+
+          <div className="workflow-heading">
+
+            <div className="section-label">
+              RAG PIPELINE
+            </div>
+
+            <h2>
+              Analysis grounded in
+              <span> your code.</span>
+            </h2>
+
+          </div>
+
+
+          <div className="workflow-grid">
+
+            <div className="workflow-step">
+
+              <div className="workflow-number">
+                01
+              </div>
+
+              <h3>
+                Chunk
+              </h3>
+
+              <p>
+                Source code is divided into meaningful
+                sections for retrieval.
+              </p>
+
+            </div>
+
+
+            <div className="workflow-line"></div>
+
+
+            <div className="workflow-step">
+
+              <div className="workflow-number">
+                02
+              </div>
+
+              <h3>
+                Embed
+              </h3>
+
+              <p>
+                Sentence Transformers convert code
+                into semantic vector representations.
+              </p>
+
+            </div>
+
+
+            <div className="workflow-line"></div>
+
+
+            <div className="workflow-step">
+
+              <div className="workflow-number">
+                03
+              </div>
+
+              <h3>
+                Search
+              </h3>
+
+              <p>
+                FAISS finds relevant code based on
+                the review question.
+              </p>
+
+            </div>
+
+
+            <div className="workflow-line"></div>
+
+
+            <div className="workflow-step">
+
+              <div className="workflow-number">
+                04
+              </div>
+
+              <h3>
+                Generate
+              </h3>
+
+              <p>
+                Groq analyzes the retrieved context
+                and returns a structured review.
               </p>
 
             </div>

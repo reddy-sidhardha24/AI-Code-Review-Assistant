@@ -1,10 +1,13 @@
+# ============================================================
+# AI CODE REVIEW ASSISTANT
 # backend/app.py
+# ============================================================
 
 import os
 import json
 
 from pathlib import Path
-from typing import List, Optional, Literal
+from typing import List
 
 from dotenv import load_dotenv
 
@@ -15,42 +18,47 @@ from fastapi import (
     File
 )
 
-
 from fastapi.middleware.cors import CORSMiddleware
 
 from pydantic import (
     BaseModel,
-    Field,
     ValidationError
 )
 
 from groq import Groq
 
 from rag.pipeline import RAGPipeline
+
 from uploads.upload_service import UploadService
+
 from services.review_service import ReviewService
+
 from models.review_models import (
     ReviewRequest,
     StructuredReview,
-    
+    PerformanceIssue
 )
 
+
 # ============================================================
-# Environment Variables
+# ENVIRONMENT VARIABLES
 # ============================================================
 
 load_dotenv()
 
-API_KEY = os.getenv("GROQ_API_KEY")
+API_KEY = os.getenv(
+    "GROQ_API_KEY"
+)
 
 if not API_KEY:
+
     raise RuntimeError(
         "GROQ_API_KEY not found in .env"
     )
 
 
 # ============================================================
-# Groq Client
+# GROQ CLIENT
 # ============================================================
 
 client = Groq(
@@ -59,16 +67,19 @@ client = Groq(
 
 
 # ============================================================
-# RAG Pipeline
+# RAG PIPELINE
 # ============================================================
 
 rag_pipeline = RAGPipeline()
 
+
 # ============================================================
-# Directories
+# DIRECTORIES
 # ============================================================
 
-UPLOAD_DIR = Path("uploads")
+UPLOAD_DIR = Path(
+    "uploads"
+)
 
 UPLOAD_DIR.mkdir(
     parents=True,
@@ -76,12 +87,19 @@ UPLOAD_DIR.mkdir(
 )
 
 
-EXTRACT_DIR = Path("extracted")
+EXTRACT_DIR = Path(
+    "extracted"
+)
 
 EXTRACT_DIR.mkdir(
     parents=True,
     exist_ok=True
 )
+
+
+# ============================================================
+# UPLOAD SERVICE
+# ============================================================
 
 upload_service = UploadService(
     upload_dir=UPLOAD_DIR,
@@ -90,6 +108,10 @@ upload_service = UploadService(
 )
 
 
+# ============================================================
+# REVIEW SERVICE
+# ============================================================
+
 review_service = ReviewService(
     rag_pipeline=rag_pipeline,
     groq_client=client
@@ -97,12 +119,12 @@ review_service = ReviewService(
 
 
 # ============================================================
-# FastAPI Application
+# FASTAPI APPLICATION
 # ============================================================
 
 app = FastAPI(
     title="AI Code Review Assistant",
-    version="1.1.0"
+    version="1.2.0"
 )
 
 
@@ -112,14 +134,22 @@ app = FastAPI(
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+
+    allow_origins=[
+        "http://localhost:3000",
+        "http://127.0.0.1:3000"
+    ],
+
     allow_credentials=True,
+
     allow_methods=["*"],
+
     allow_headers=["*"]
 )
 
+
 # ============================================================
-# Paste Code Request
+# PASTE CODE REQUEST
 # ============================================================
 
 class PasteCodeRequest(BaseModel):
@@ -130,7 +160,7 @@ class PasteCodeRequest(BaseModel):
 
 
 # ============================================================
-# Utility - Clean LLM JSON
+# CLEAN LLM JSON
 # ============================================================
 
 def clean_json_response(
@@ -138,26 +168,45 @@ def clean_json_response(
 ) -> str:
 
     """
-    Removes Markdown code fences if the model accidentally
-    returns them.
+    Removes accidental Markdown code fences
+    from the LLM response.
     """
+
+    if not content:
+
+        return ""
 
     content = content.strip()
 
-    if content.startswith("```json"):
-        content = content[7:]
+    if content.startswith(
+        "```json"
+    ):
 
-    elif content.startswith("```"):
-        content = content[3:]
+        content = content[
+            len("```json"):
+        ]
 
-    if content.endswith("```"):
-        content = content[:-3]
+    elif content.startswith(
+        "```"
+    ):
+
+        content = content[
+            len("```"):
+        ]
+
+    if content.endswith(
+        "```"
+    ):
+
+        content = content[
+            :-len("```")
+        ]
 
     return content.strip()
 
 
 # ============================================================
-# Utility - Validate Findings
+# VALIDATE FINDINGS
 # ============================================================
 
 def validate_findings(
@@ -165,15 +214,16 @@ def validate_findings(
 ) -> StructuredReview:
 
     """
-    Performs additional backend verification.
+    Performs conservative backend validation.
 
     The LLM is not trusted blindly.
-    Findings without evidence are removed.
+    Findings without evidence or file information
+    are removed.
     """
 
-    # --------------------------------------------------------
-    # Validate Bugs
-    # --------------------------------------------------------
+    # ========================================================
+    # BUGS
+    # ========================================================
 
     verified_bugs = []
 
@@ -203,9 +253,10 @@ def validate_findings(
 
     review.bugs = verified_bugs
 
-    # --------------------------------------------------------
-    # Validate Errors
-    # --------------------------------------------------------
+
+    # ========================================================
+    # ERRORS
+    # ========================================================
 
     verified_errors = []
 
@@ -235,67 +286,612 @@ def validate_findings(
 
     review.errors = verified_errors
 
+
+    # ========================================================
+    # SECURITY COUNT
+    # ========================================================
+
+    if review.security:
+
+        review.security.issues_found = (
+            len(
+                review.security.issues
+            )
+        )
+
+
     return review
 
 
 # ============================================================
-# Home API
+# NORMALIZE REVIEW
+# ============================================================
+
+def normalize_review(
+    review: StructuredReview,
+    question: str
+) -> StructuredReview:
+
+    """
+    Final deterministic normalization.
+
+    This prevents incomplete LLM output from producing
+    poor frontend results.
+
+    It does NOT invent code findings.
+    """
+
+    # ========================================================
+    # SUMMARY FALLBACK
+    # ========================================================
+
+    if not review.answer_summary.strip():
+
+        bug_count = len(
+            review.bugs
+        )
+
+        error_count = len(
+            review.errors
+        )
+
+        security_count = 0
+
+        if review.security:
+
+            security_count = len(
+                review.security.issues
+            )
+
+        performance_count = 0
+
+        if review.performance:
+
+            performance_count = len(
+                review.performance.issues
+            )
+
+        quality_count = 0
+
+        if review.code_quality:
+
+            quality_count = (
+                len(
+                    review.code_quality.observations
+                )
+                +
+                len(
+                    review.code_quality.suggestions
+                )
+            )
+
+        findings = []
+
+        if bug_count:
+
+            findings.append(
+                f"{bug_count} bug"
+                + (
+                    "s"
+                    if bug_count != 1
+                    else ""
+                )
+            )
+
+        if error_count:
+
+            findings.append(
+                f"{error_count} error"
+                + (
+                    "s"
+                    if error_count != 1
+                    else ""
+                )
+            )
+
+        if security_count:
+
+            findings.append(
+                f"{security_count} security issue"
+                + (
+                    "s"
+                    if security_count != 1
+                    else ""
+                )
+            )
+
+        if performance_count:
+
+            findings.append(
+                f"{performance_count} performance concern"
+                + (
+                    "s"
+                    if performance_count != 1
+                    else ""
+                )
+            )
+
+        if quality_count:
+
+            findings.append(
+                f"{quality_count} code-quality finding"
+                + (
+                    "s"
+                    if quality_count != 1
+                    else ""
+                )
+            )
+
+        if findings:
+
+            review.answer_summary = (
+                "The review identified "
+                + ", ".join(findings)
+                + ". See the detailed findings below."
+            )
+
+        else:
+
+            review.answer_summary = (
+                "The project was reviewed successfully. "
+                "No supported issues were identified "
+                "for the requested analysis."
+            )
+
+
+    # ========================================================
+    # FINAL VERDICT FALLBACK
+    # ========================================================
+
+    if not review.final_verdict.strip():
+
+        security_count = 0
+
+        if review.security:
+
+            security_count = len(
+                review.security.issues
+            )
+
+        performance_count = 0
+
+        if review.performance:
+
+            performance_count = len(
+                review.performance.issues
+            )
+
+        quality_count = 0
+
+        if review.code_quality:
+
+            quality_count = (
+                len(
+                    review.code_quality.observations
+                )
+                +
+                len(
+                    review.code_quality.suggestions
+                )
+            )
+
+        total_findings = (
+            len(review.bugs)
+            +
+            len(review.errors)
+            +
+            security_count
+            +
+            performance_count
+            +
+            quality_count
+        )
+
+        if total_findings == 0:
+
+            review.final_verdict = (
+                "No supported issues were identified "
+                "in the analyzed project."
+            )
+
+        else:
+
+            review.final_verdict = (
+                f"The review identified "
+                f"{total_findings} supported finding"
+                + (
+                    "s"
+                    if total_findings != 1
+                    else ""
+                )
+                + " across the requested analysis areas. "
+                "The highest-severity findings should be "
+                "addressed before production use."
+            )
+
+
+    # ========================================================
+    # SECURITY COUNT
+    # ========================================================
+
+    if review.security:
+
+        review.security.issues_found = (
+            len(
+                review.security.issues
+            )
+        )
+
+
+    # ========================================================
+    # CLEAN METHODS
+    # ========================================================
+
+    review.key_methods = list(
+        dict.fromkeys(
+            method.strip()
+            for method in review.key_methods
+            if isinstance(
+                method,
+                str
+            )
+            and method.strip()
+        )
+    )
+
+
+    # ========================================================
+    # CLEAN CLASSES
+    # ========================================================
+
+    review.key_classes = list(
+        dict.fromkeys(
+            item.strip()
+            for item in review.key_classes
+            if isinstance(
+                item,
+                str
+            )
+            and item.strip()
+        )
+    )
+
+
+    # ========================================================
+    # CLEAN LIBRARIES
+    # ========================================================
+
+    review.libraries = list(
+        dict.fromkeys(
+            item.strip()
+            for item in review.libraries
+            if isinstance(
+                item,
+                str
+            )
+            and item.strip()
+        )
+    )
+
+
+    # ========================================================
+    # PERFORMANCE CONSISTENCY
+    # ========================================================
+
+    if review.performance:
+
+        performance_text = ""
+
+        for issue in (
+            review.performance.issues
+        ):
+
+            performance_text += (
+                " "
+                + (
+                    issue.title
+                    or ""
+                )
+            )
+
+            performance_text += (
+                " "
+                + (
+                    issue.description
+                    or ""
+                )
+            )
+
+            performance_text += (
+                " "
+                + (
+                    issue.evidence
+                    or ""
+                )
+            )
+
+        performance_text = (
+            performance_text.lower()
+        )
+
+        quadratic_indicators = [
+
+            "o(n^2)",
+
+            "o(n²)",
+
+            "quadratic",
+
+            "nested loop",
+
+            "nested loops",
+
+            "quadratic time"
+
+        ]
+
+        quadratic_detected = any(
+
+            indicator
+            in performance_text
+
+            for indicator
+            in quadratic_indicators
+
+        )
+
+        if quadratic_detected:
+
+            review.performance.time_complexity = (
+                "O(n²)"
+            )
+
+
+    # ========================================================
+    # CONFIDENCE FALLBACK
+    # ========================================================
+
+    confidences = []
+
+    # --------------------------------------------------------
+    # Bugs
+    # --------------------------------------------------------
+
+    for bug in review.bugs:
+
+        if bug.confidence > 0:
+
+            confidences.append(
+                bug.confidence
+            )
+
+
+    # --------------------------------------------------------
+    # Errors
+    # --------------------------------------------------------
+
+    for error in review.errors:
+
+        if error.confidence > 0:
+
+            confidences.append(
+                error.confidence
+            )
+
+
+    # --------------------------------------------------------
+    # Performance
+    # --------------------------------------------------------
+
+    if review.performance:
+
+        for issue in (
+            review.performance.issues
+        ):
+
+            if issue.confidence > 0:
+
+                confidences.append(
+                    issue.confidence
+                )
+
+
+    if confidences:
+
+        review.confidence = round(
+            sum(confidences)
+            /
+            len(confidences)
+        )
+
+    elif (
+        review.bugs
+        or review.errors
+        or (
+            review.security
+            and review.security.issues
+        )
+        or (
+            review.performance
+            and review.performance.issues
+        )
+        or (
+            review.code_quality
+            and (
+                review.code_quality.observations
+                or
+                review.code_quality.suggestions
+            )
+        )
+    ):
+
+        review.confidence = 80
+
+    else:
+
+        review.confidence = 0
+
+
+    # ========================================================
+    # QUESTION
+    # ========================================================
+
+    review.question = (
+        question
+    )
+
+
+    return review
+
+
+# ============================================================
+# HOME
 # ============================================================
 
 @app.get("/")
 def home():
 
     return {
+
         "success": True,
+
         "message": (
             "AI Code Review Assistant "
             "Backend Running Successfully"
         ),
-        "version": "1.1.0"
+
+        "version": "1.2.0"
+
     }
 
 
 # ============================================================
-# Project Information API
+# PROJECT INFORMATION
 # ============================================================
 
 @app.get("/project-info")
 def project_info():
 
     metadata = (
-        rag_pipeline.get_project_metadata()
+        rag_pipeline
+        .get_project_metadata()
     )
 
     if not metadata:
 
         raise HTTPException(
             status_code=404,
-            detail="No project is currently indexed."
+            detail=(
+                "No project is currently indexed."
+            )
         )
 
     return {
+
         "success": True,
+
         "project": metadata
+
     }
 
 
 # ============================================================
-# Upload Project API
+# UPLOAD PROJECT
 # ============================================================
 
+@app.post("/upload-project")
+async def upload_project(
+    file: UploadFile = File(...)
+):
 
+    try:
+
+        if not file.filename:
+
+            raise HTTPException(
+                status_code=400,
+                detail=(
+                    "Please select a ZIP project."
+                )
+            )
+
+        if not file.filename.lower().endswith(
+            ".zip"
+        ):
+
+            raise HTTPException(
+                status_code=400,
+                detail=(
+                    "Only ZIP project files are supported."
+                )
+            )
+
+        return await (
+            upload_service
+            .process_project(
+                file
+            )
+        )
+
+    except HTTPException:
+
+        raise
+
+    except Exception as e:
+
+        print(
+            "Upload Project Error:",
+            repr(e)
+        )
+
+        raise HTTPException(
+            status_code=500,
+            detail=(
+                "Failed to upload project."
+            )
+        )
+
+    finally:
+
+        try:
+
+            await file.close()
+
+        except Exception:
+
+            pass
+
+
+# ============================================================
+# UPLOAD MULTIPLE SOURCE FILES
+# ============================================================
 
 @app.post("/upload-files")
 async def upload_files(
     files: List[UploadFile] = File(...)
 ):
+
     try:
 
-        return await upload_service.process_multiple_files(
-            files
+        if not files:
+
+            raise HTTPException(
+                status_code=400,
+                detail=(
+                    "Please select at least "
+                    "one source file."
+                )
+            )
+
+        return await (
+            upload_service
+            .process_multiple_files(
+                files
+            )
         )
 
     except HTTPException:
+
         raise
 
     except Exception as e:
@@ -307,29 +903,71 @@ async def upload_files(
 
         raise HTTPException(
             status_code=500,
-            detail="Failed to upload source files."
+            detail=(
+                "Failed to upload source files."
+            )
         )
 
     finally:
 
         for file in files:
+
             try:
+
                 await file.close()
+
             except Exception:
+
                 pass
-            
+
+
+# ============================================================
+# PASTE CODE
+# ============================================================
+
 @app.post("/paste-code")
 def paste_code(
     data: PasteCodeRequest
 ):
+
     try:
 
-        return upload_service.process_paste_code(
-            code=data.code,
-            filename=data.filename
+        filename = (
+            data.filename.strip()
+        )
+
+        code = (
+            data.code.strip()
+        )
+
+        if not filename:
+
+            raise HTTPException(
+                status_code=400,
+                detail=(
+                    "Filename cannot be empty."
+                )
+            )
+
+        if not code:
+
+            raise HTTPException(
+                status_code=400,
+                detail=(
+                    "Code cannot be empty."
+                )
+            )
+
+        return (
+            upload_service
+            .process_paste_code(
+                code=code,
+                filename=filename
+            )
         )
 
     except HTTPException:
+
         raise
 
     except Exception as e:
@@ -341,10 +979,14 @@ def paste_code(
 
         raise HTTPException(
             status_code=500,
-            detail="Failed to process pasted code."
+            detail=(
+                "Failed to process pasted code."
+            )
         )
+
+
 # ============================================================
-# Review Project API
+# REVIEW PROJECT
 # ============================================================
 
 @app.post("/review")
@@ -354,9 +996,9 @@ def review_project(
 
     try:
 
-        # ----------------------------------------------------
-        # Validate Question
-        # ----------------------------------------------------
+        # ====================================================
+        # VALIDATE QUESTION
+        # ====================================================
 
         question = (
             data.question.strip()
@@ -372,9 +1014,10 @@ def review_project(
                 )
             )
 
-        # ----------------------------------------------------
-        # Check Vector Database
-        # ----------------------------------------------------
+
+        # ====================================================
+        # CHECK VECTOR DATABASE
+        # ====================================================
 
         if not (
             rag_pipeline
@@ -389,9 +1032,10 @@ def review_project(
                 )
             )
 
-        # ----------------------------------------------------
-        # Detect Review Intent
-        # ----------------------------------------------------
+
+        # ====================================================
+        # DETECT REVIEW TYPES
+        # ====================================================
 
         detected_modes = (
             rag_pipeline
@@ -406,92 +1050,92 @@ def review_project(
             detected_modes
         )
 
-        # ----------------------------------------------------
-        # Generate Dynamic RAG Prompt
-        # ----------------------------------------------------
+
+        # ====================================================
+        # GENERATE RAG PROMPT
+        #
+        # IMPORTANT:
+        # RAGPipeline uses generate_prompt().
+        #
+        # Do NOT use build_review_prompt().
+        # ====================================================
 
         prompt = (
-            rag_pipeline.generate_prompt(
-                question
+            rag_pipeline
+            .generate_prompt(
+                query=question
             )
         )
 
-        # ----------------------------------------------------
-        # Debug Prompt Size
-        # ----------------------------------------------------
 
-        prompt_characters = len(
-            prompt
-        )
-
-        estimated_prompt_tokens = max(
-            1,
-            prompt_characters // 4
+        print(
+            "\nPrompt generated successfully."
         )
 
         print(
             "Prompt Characters:",
-            prompt_characters
+            len(prompt)
         )
 
         print(
             "Estimated Prompt Tokens:",
-            estimated_prompt_tokens
+            len(prompt) // 4
         )
 
-        # ----------------------------------------------------
-        # Safety Check
-        #
-        # This is intentionally conservative because your
-        # Groq account already hit a 6000 TPM request limit.
-        # ----------------------------------------------------
 
-        if estimated_prompt_tokens > 5200:
-
-            print(
-                "WARNING: Prompt is becoming too large."
-            )
-
-        # ----------------------------------------------------
-        # Groq Request
-        # ----------------------------------------------------
+        # ====================================================
+        # GROQ REQUEST
+        # ====================================================
 
         response = (
-            client.chat.completions.create(
+            client
+            .chat
+            .completions
+            .create(
 
-                model="llama-3.1-8b-instant",
+                model=(
+                    "llama-3.1-8b-instant"
+                ),
 
                 temperature=0.1,
 
-                # Force JSON response where supported.
                 response_format={
                     "type": "json_object"
                 },
 
                 messages=[
+
                     {
                         "role": "system",
+
                         "content": (
                             "You are an expert senior "
                             "software engineer performing "
                             "grounded code analysis. "
-                            "Use only the supplied project "
-                            "metadata and retrieved source "
-                            "code. Return one valid JSON "
-                            "object and no Markdown."
+                            "Analyze ONLY the supplied "
+                            "project metadata and retrieved "
+                            "source code. "
+                            "Return ONLY valid JSON."
                         )
+
                     },
+
                     {
                         "role": "user",
+
                         "content": prompt
+
                     }
+
                 ]
+
             )
         )
 
-        # ----------------------------------------------------
-        # Extract Response
-        # ----------------------------------------------------
+
+        # ====================================================
+        # EXTRACT RESPONSE
+        # ====================================================
 
         raw_answer = (
             response
@@ -499,6 +1143,7 @@ def review_project(
             .message
             .content
         )
+
 
         if not raw_answer:
 
@@ -510,9 +1155,10 @@ def review_project(
                 )
             )
 
-        # ----------------------------------------------------
-        # Clean JSON
-        # ----------------------------------------------------
+
+        # ====================================================
+        # CLEAN RESPONSE
+        # ====================================================
 
         cleaned_answer = (
             clean_json_response(
@@ -520,9 +1166,10 @@ def review_project(
             )
         )
 
-        # ----------------------------------------------------
-        # Parse JSON
-        # ----------------------------------------------------
+
+        # ====================================================
+        # PARSE JSON
+        # ====================================================
 
         try:
 
@@ -537,14 +1184,11 @@ def review_project(
             )
 
             print(
-                raw_answer
+                cleaned_answer
             )
 
             print(
-                "\nJSON ERROR:"
-            )
-
-            print(
+                "\nJSON ERROR:",
                 str(e)
             )
 
@@ -556,12 +1200,14 @@ def review_project(
                 )
             )
 
-        # ----------------------------------------------------
-        # Make Review Types Reliable
-        #
-        # Do not blindly trust the LLM to correctly reproduce
-        # something our backend already knows.
-        # ----------------------------------------------------
+
+        # ====================================================
+        # FORCE RELIABLE FIELDS
+        # ====================================================
+
+        review_json[
+            "question"
+        ] = question
 
         review_json[
             "review_types"
@@ -571,17 +1217,10 @@ def review_project(
             )
         )
 
-        # ----------------------------------------------------
-        # Keep Original Question Reliable
-        # ----------------------------------------------------
 
-        review_json[
-            "question"
-        ] = question
-
-        # ----------------------------------------------------
-        # Validate Structure
-        # ----------------------------------------------------
+        # ====================================================
+        # PYDANTIC VALIDATION
+        # ====================================================
 
         try:
 
@@ -609,7 +1248,8 @@ def review_project(
             print(
                 json.dumps(
                     review_json,
-                    indent=2
+                    indent=2,
+                    ensure_ascii=False
                 )
             )
 
@@ -622,9 +1262,10 @@ def review_project(
                 )
             )
 
-        # ----------------------------------------------------
-        # Evidence Validation
-        # ----------------------------------------------------
+
+        # ====================================================
+        # BACKEND VALIDATION
+        # ====================================================
 
         validated_review = (
             validate_findings(
@@ -632,71 +1273,138 @@ def review_project(
             )
         )
 
-        # ----------------------------------------------------
-        # Enforce Dynamic Sections
-        #
-        # This prevents the model from filling irrelevant
-        # sections for simple questions.
-        # ----------------------------------------------------
+
+        # ====================================================
+        # NORMALIZATION
+        # ====================================================
+
+        validated_review = (
+            normalize_review(
+                review=validated_review,
+                question=question
+            )
+        )
+
+
+        # ====================================================
+        # DYNAMIC REVIEW SECTIONS
+        # ====================================================
 
         modes = set(
-            validated_review.review_types
+            validated_review
+            .review_types
         )
 
         full_review = (
-            "full_review" in modes
+            "full_review"
+            in modes
         )
 
+
+        # ----------------------------------------------------
+        # PERFORMANCE
+        # ----------------------------------------------------
+
         if (
-            "performance" not in modes
+            "performance"
+            not in modes
             and not full_review
         ):
+
             validated_review.performance = None
 
+
+        # ----------------------------------------------------
+        # SECURITY
+        # ----------------------------------------------------
+
         if (
-            "security" not in modes
+            "security"
+            not in modes
             and not full_review
         ):
+
             validated_review.security = None
 
+
+        # ----------------------------------------------------
+        # CODE QUALITY
+        # ----------------------------------------------------
+
         if (
-            "code_quality" not in modes
+            "code_quality"
+            not in modes
             and not full_review
         ):
+
             validated_review.code_quality = None
 
+
+        # ----------------------------------------------------
+        # EXPECTED OUTPUT
+        # ----------------------------------------------------
+
         if (
-            "output" not in modes
+            "output"
+            not in modes
             and not full_review
         ):
+
             validated_review.expected_output = None
 
-        # ----------------------------------------------------
-        # Score Protection
-        # ----------------------------------------------------
+
+        # ====================================================
+        # SCORE PROTECTION
+        # ====================================================
 
         score_keywords = [
+
             "score",
+
             "rating",
+
             "rate this",
+
             "code quality score",
+
             "project score"
+
         ]
 
         score_requested = any(
-            keyword in question.lower()
-            for keyword in score_keywords
+
+            keyword
+            in question.lower()
+
+            for keyword
+            in score_keywords
+
         )
+
 
         if not score_requested:
 
             validated_review.score = None
 
-        # ----------------------------------------------------
-        # Final Response
-        # ----------------------------------------------------
+
+        # ====================================================
+        # FINAL NORMALIZATION
+        # ====================================================
+
+        validated_review = (
+            normalize_review(
+                review=validated_review,
+                question=question
+            )
+        )
+
+
+        # ====================================================
+        # RESPONSE
+        # ====================================================
 
         return {
+
             "success": True,
 
             "question": question,
@@ -710,69 +1418,139 @@ def review_project(
                 validated_review
                 .model_dump()
             )
+
         }
 
+
+    # ========================================================
+    # HTTP EXCEPTIONS
+    # ========================================================
+
     except HTTPException:
+
         raise
 
-    except Exception as e:
 
-        # ----------------------------------------------------
-        # Groq / Other API Errors
-        # ----------------------------------------------------
+    # ========================================================
+    # GENERAL ERROR
+    # ========================================================
+
+    except Exception as e:
 
         error_text = str(e)
 
         print(
             "\nReview Error:",
-            error_text
+            repr(e)
         )
 
-        # ----------------------------------------------------
-        # Token / Request Size Problem
-        # ----------------------------------------------------
+
+        # ====================================================
+        # RATE LIMIT
+        # ====================================================
 
         if (
-            "413" in error_text
-            or "Request too large" in error_text
-            or "tokens per minute" in error_text
+
+            "429"
+            in error_text
+
+            or
+
+            "rate_limit"
+            in error_text.lower()
+
         ):
 
             raise HTTPException(
-                status_code=413,
-                detail=(
-                    "The retrieved code and prompt are "
-                    "too large for the current AI model "
-                    "token limit. Reduce retrieved context "
-                    "or try a more specific question."
-                )
-            )
 
-        # ----------------------------------------------------
-        # Rate Limit
-        # ----------------------------------------------------
-
-        if (
-            "429" in error_text
-            or "rate_limit" in error_text.lower()
-        ):
-
-            raise HTTPException(
                 status_code=429,
+
                 detail=(
                     "AI model rate limit reached. "
                     "Please try again shortly."
                 )
+
             )
 
-        # ----------------------------------------------------
-        # Generic Failure
-        # ----------------------------------------------------
+
+        # ====================================================
+        # AUTHENTICATION
+        # ====================================================
+
+        if (
+
+            "401"
+            in error_text
+
+            or
+
+            "authentication"
+            in error_text.lower()
+
+            or
+
+            "invalid api key"
+            in error_text.lower()
+
+        ):
+
+            raise HTTPException(
+
+                status_code=502,
+
+                detail=(
+                    "AI provider authentication failed. "
+                    "Check GROQ_API_KEY in .env."
+                )
+
+            )
+
+
+        # ====================================================
+        # TOKEN / REQUEST SIZE
+        # ====================================================
+
+        if (
+
+            "413"
+            in error_text
+
+            or
+
+            "request too large"
+            in error_text.lower()
+
+            or
+
+            "tokens per minute"
+            in error_text.lower()
+
+        ):
+
+            raise HTTPException(
+
+                status_code=413,
+
+                detail=(
+                    "The retrieved code and prompt "
+                    "are too large for the current "
+                    "AI model limit."
+                )
+
+            )
+
+
+        # ====================================================
+        # GENERIC
+        # ====================================================
 
         raise HTTPException(
+
             status_code=500,
+
             detail=(
                 "Failed to generate "
                 "code review."
             )
+
         )
