@@ -1,0 +1,11 @@
+public class Main {
+    public static void main(String[] args) {
+        String username = new String("admin");
+
+        if (username == "admin") {
+            System.out.println("Access granted");
+        } else {
+            System.out.println("Access denied");
+        }
+    }
+}
