@@ -1,48 +1,20 @@
 {
-    "project_name": "rag_test_project",
-    "total_files": 5,
-    "total_lines": 111,
+    "project_name": "pasted_code",
+    "total_files": 1,
+    "total_lines": 79,
     "languages": {
         "Python": {
-            "files": 5,
-            "lines": 111
+            "files": 1,
+            "lines": 79
         }
     },
     "files": [
         {
-            "name": "auth.py",
-            "path": "rag_test_project\\auth.py",
+            "name": "new.py",
+            "path": "new.py",
             "extension": ".py",
             "language": "Python",
-            "lines": 19
-        },
-        {
-            "name": "config.py",
-            "path": "rag_test_project\\config.py",
-            "extension": ".py",
-            "language": "Python",
-            "lines": 7
-        },
-        {
-            "name": "database.py",
-            "path": "rag_test_project\\database.py",
-            "extension": ".py",
-            "language": "Python",
-            "lines": 23
-        },
-        {
-            "name": "main.py",
-            "path": "rag_test_project\\main.py",
-            "extension": ".py",
-            "language": "Python",
-            "lines": 38
-        },
-        {
-            "name": "utils.py",
-            "path": "rag_test_project\\utils.py",
-            "extension": ".py",
-            "language": "Python",
-            "lines": 24
+            "lines": 79
         }
     ]
 }

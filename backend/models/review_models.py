@@ -1,13 +1,14 @@
+# ============================================================
+# backend/models/review_models.py
+# ============================================================
+
 from typing import List, Optional, Literal
 
-from pydantic import (
-    BaseModel,
-    Field,
-)
+from pydantic import BaseModel, Field
 
 
 # ============================================================
-# Request Model
+# REQUEST MODEL
 # ============================================================
 
 class ReviewRequest(BaseModel):
@@ -15,9 +16,11 @@ class ReviewRequest(BaseModel):
     question: str = Field(
         min_length=1,
         max_length=2000
-)
+    )
+
+
 # ============================================================
-# Paste Code Request
+# PASTE CODE REQUEST
 # ============================================================
 
 class PasteCodeRequest(BaseModel):
@@ -32,8 +35,9 @@ class PasteCodeRequest(BaseModel):
         min_length=1
     )
 
+
 # ============================================================
-# Project Information
+# PROJECT INFORMATION
 # ============================================================
 
 class ProjectInfo(BaseModel):
@@ -56,7 +60,7 @@ class ProjectInfo(BaseModel):
 
 
 # ============================================================
-# File Analyzed
+# FILE ANALYZED
 # ============================================================
 
 class FileAnalyzed(BaseModel):
@@ -69,7 +73,7 @@ class FileAnalyzed(BaseModel):
 
 
 # ============================================================
-# Bug Finding
+# BUG FINDING
 # ============================================================
 
 class BugFinding(BaseModel):
@@ -95,13 +99,13 @@ class BugFinding(BaseModel):
 
     line_range: Optional[str] = None
 
-    evidence: str
+    evidence: str = ""
 
     description: str
 
-    impact: str
+    impact: str = ""
 
-    fix: str
+    fix: str = ""
 
     confidence: int = Field(
         default=0,
@@ -111,7 +115,7 @@ class BugFinding(BaseModel):
 
 
 # ============================================================
-# Error Finding
+# ERROR FINDING
 # ============================================================
 
 class ErrorFinding(BaseModel):
@@ -132,7 +136,7 @@ class ErrorFinding(BaseModel):
 
     impact: str = ""
 
-    fix: str
+    fix: str = ""
 
     confidence: int = Field(
         default=0,
@@ -142,7 +146,7 @@ class ErrorFinding(BaseModel):
 
 
 # ============================================================
-# Performance
+# PERFORMANCE FINDING
 # ============================================================
 
 class PerformanceIssue(BaseModel):
@@ -170,19 +174,25 @@ class PerformanceIssue(BaseModel):
     )
 
 
+# ============================================================
+# PERFORMANCE INFORMATION
+# ============================================================
+
 class PerformanceInfo(BaseModel):
 
     time_complexity: str = ""
 
     space_complexity: str = ""
 
-    issues: List[PerformanceIssue] = Field(
+    issues: List[
+        PerformanceIssue
+    ] = Field(
         default_factory=list
     )
 
 
 # ============================================================
-# Security Finding
+# SECURITY FINDING
 # ============================================================
 
 class SecurityFinding(BaseModel):
@@ -191,9 +201,36 @@ class SecurityFinding(BaseModel):
 
     description: str
 
+    file: Optional[str] = None
+
+    line: Optional[int] = None
+
+    line_range: Optional[str] = None
+
+    evidence: Optional[str] = None
+
+    impact: Optional[str] = None
+
+    suggestion: Optional[str] = None
+
+    severity: Optional[
+        Literal[
+            "critical",
+            "high",
+            "medium",
+            "low"
+        ]
+    ] = None
+
+    confidence: Optional[int] = Field(
+        default=None,
+        ge=0,
+        le=100
+    )
+
 
 # ============================================================
-# Security
+# SECURITY INFORMATION
 # ============================================================
 
 class SecurityInfo(BaseModel):
@@ -211,7 +248,7 @@ class SecurityInfo(BaseModel):
 
 
 # ============================================================
-# Code Quality Finding
+# CODE QUALITY FINDING
 # ============================================================
 
 class CodeQualityFinding(BaseModel):
@@ -220,9 +257,27 @@ class CodeQualityFinding(BaseModel):
 
     description: str
 
+    file: Optional[str] = None
+
+    line: Optional[int] = None
+
+    line_range: Optional[str] = None
+
+    evidence: Optional[str] = None
+
+    impact: Optional[str] = None
+
+    suggestion: Optional[str] = None
+
+    confidence: Optional[int] = Field(
+        default=None,
+        ge=0,
+        le=100
+    )
+
 
 # ============================================================
-# Code Quality
+# CODE QUALITY INFORMATION
 # ============================================================
 
 class CodeQualityInfo(BaseModel):
@@ -239,8 +294,9 @@ class CodeQualityInfo(BaseModel):
         default_factory=list
     )
 
+
 # ============================================================
-# Structured Review
+# STRUCTURED REVIEW
 # ============================================================
 
 class StructuredReview(BaseModel):
@@ -249,31 +305,29 @@ class StructuredReview(BaseModel):
 
     question: str
 
-    # Dynamic review types detected by PromptBuilder
     review_types: List[str] = Field(
         default_factory=list
     )
 
     answer_summary: str = ""
 
-    files_analyzed: List[FileAnalyzed] = Field(
+    files_analyzed: List[
+        FileAnalyzed
+    ] = Field(
         default_factory=list
     )
 
-    bugs: List[BugFinding] = Field(
+    bugs: List[
+        BugFinding
+    ] = Field(
         default_factory=list
     )
 
-    errors: List[ErrorFinding] = Field(
+    errors: List[
+        ErrorFinding
+    ] = Field(
         default_factory=list
     )
-
-    # --------------------------------------------------------
-    # Optional analysis sections
-    #
-    # Explanation-only questions should not be forced to
-    # generate meaningless performance/security sections.
-    # --------------------------------------------------------
 
     performance: Optional[
         PerformanceInfo

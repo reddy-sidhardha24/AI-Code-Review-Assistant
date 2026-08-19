@@ -1,8 +1,8 @@
 # backend/rag/pipeline.py
 
-import os
 import json
-from typing import Dict, List
+import os
+from typing import Dict, List, Optional
 
 from .loader import ProjectLoader
 from .chunker import CodeChunker
@@ -14,33 +14,55 @@ from .prompt_builder import PromptBuilder
 
 class RAGPipeline:
     """
-    RAG Pipeline
+    Main RAG pipeline for AI Code Review Assistant.
 
-    Project
-        ↓
-    Loader
-        ↓
-    Metadata
-        ↓
-    Chunker
-        ↓
-    Embedder
-        ↓
-    FAISS Vector Store
-        ↓
-    Query Classification
-        ↓
-    ┌────────────────┬─────────────────┐
-    │ Targeted       │ Project-wide    │
-    │ Retrieval      │ Retrieval       │
-    └────────────────┴─────────────────┘
-        ↓
-    Prompt Builder
+    Flow:
+
+        Project
+            ↓
+        Loader
+            ↓
+        Chunker
+            ↓
+        Embedder
+            ↓
+        Fresh VectorStore
+            ↓
+        Retriever
+            ↓
+        Query Classification
+            ↓
+        Retrieval
+            ↓
+        Prompt Builder
+            ↓
+        LLM
     """
 
-    # ==================================================
-    # Broad-query phrases
-    # ==================================================
+    # ============================================================
+    # Persistent paths
+    # ============================================================
+
+    VECTOR_DB_DIR = "vector_db"
+
+    INDEX_PATH = os.path.join(
+        VECTOR_DB_DIR,
+        "faiss.index"
+    )
+
+    METADATA_PATH = os.path.join(
+        VECTOR_DB_DIR,
+        "metadata.pkl"
+    )
+
+    PROJECT_METADATA_PATH = os.path.join(
+        VECTOR_DB_DIR,
+        "project_metadata.json"
+    )
+
+    # ============================================================
+    # Project-wide query phrases
+    # ============================================================
 
     PROJECT_WIDE_PHRASES = (
         "complete analysis",
@@ -69,15 +91,27 @@ class RAGPipeline:
         "review everything",
     )
 
+    # ============================================================
+    # Constructor
+    # ============================================================
+
     def __init__(self):
 
-        print("\nInitializing RAG Pipeline...\n")
+        print(
+            "\nInitializing RAG Pipeline...\n"
+        )
 
-        self.loader = None
+        self.loader: Optional[
+            ProjectLoader
+        ] = None
 
         self.chunker = CodeChunker()
 
         self.embedder = CodeEmbedder()
+
+        # --------------------------------------------------------
+        # Pipeline owns exactly one active VectorStore.
+        # --------------------------------------------------------
 
         self.vector_store = VectorStore()
 
@@ -85,11 +119,13 @@ class RAGPipeline:
 
         self.project_metadata = None
 
-        self.retriever = None
+        self.retriever: Optional[
+            Retriever
+        ] = None
 
-        # ----------------------------------------------
-        # Load existing database if available
-        # ----------------------------------------------
+        # --------------------------------------------------------
+        # Restore last persisted project after server restart.
+        # --------------------------------------------------------
 
         if self.vector_database_exists():
 
@@ -99,41 +135,140 @@ class RAGPipeline:
 
             try:
 
-                self.retriever = Retriever()
+                self.vector_store.load(
+                    index_path=self.INDEX_PATH,
+                    metadata_path=self.METADATA_PATH
+                )
+
+                self._create_retriever()
 
                 print(
-                    "Retriever loaded successfully."
+                    "Existing vector database "
+                    "and retriever loaded successfully."
                 )
 
             except Exception as e:
 
                 print(
-                    "Could not initialize retriever:",
-                    str(e)
+                    "Could not load existing "
+                    "vector database:",
+                    repr(e)
                 )
 
-        # ----------------------------------------------
-        # Load existing metadata
-        # ----------------------------------------------
+                self.vector_store = VectorStore()
+
+                self.retriever = None
+
+        # --------------------------------------------------------
+        # Load project metadata.
+        # --------------------------------------------------------
 
         self.load_project_metadata()
 
-        print("\nRAG Pipeline Ready.\n")
+        print(
+            "\nRAG Pipeline Ready.\n"
+        )
 
-    # ==================================================
-    # Build Vector Database
-    # ==================================================
+    # ============================================================
+    # CREATE RETRIEVER
+    # ============================================================
+
+    def _create_retriever(self):
+        """
+        Create Retriever using THIS pipeline's VectorStore.
+
+        This is critical for project isolation.
+
+        The Retriever must not independently load an old
+        vector_db/metadata.pkl when a fresh VectorStore is
+        already available.
+        """
+
+        self.retriever = Retriever(
+            vector_store=self.vector_store
+        )
+
+        # --------------------------------------------------------
+        # Diagnostic verification
+        # --------------------------------------------------------
+
+        print(
+            "\n========== RETRIEVER STATE =========="
+        )
+
+        print(
+            "Pipeline VectorStore:",
+            id(self.vector_store)
+        )
+
+        print(
+            "Retriever VectorStore:",
+            id(self.retriever.vector_store)
+        )
+
+        print(
+            "Same VectorStore:",
+            self.retriever.vector_store
+            is self.vector_store
+        )
+
+        print(
+            "Retriever chunks:",
+            self.retriever.vector_store.size()
+        )
+
+        print(
+            "Retriever files:",
+            self.retriever.vector_store.get_indexed_files()
+        )
+
+        print(
+            "=====================================\n"
+        )
+
+    # ============================================================
+    # BUILD VECTOR DATABASE
+    # ============================================================
 
     def build_vector_database(
         self,
         project_path: str
     ):
 
-        print("\nLoading project...")
+        print(
+            "\n=========================================="
+        )
 
-        # ----------------------------------------------
-        # Load source files
-        # ----------------------------------------------
+        print(
+            "BUILDING NEW PROJECT INDEX"
+        )
+
+        print(
+            "=========================================="
+        )
+
+        print(
+            "Project Path:",
+            project_path
+        )
+
+        # ========================================================
+        # CRITICAL PROJECT RESET
+        # ========================================================
+
+        self.vector_store = VectorStore()
+
+        self.retriever = None
+
+        self.project_metadata = None
+
+        # ========================================================
+        # LOAD PROJECT
+        # ========================================================
+
+        print(
+            "\nLoading project..."
+        )
 
         self.loader = ProjectLoader(
             project_path
@@ -152,15 +287,17 @@ class RAGPipeline:
             f"Loaded {len(documents)} files."
         )
 
-        # ----------------------------------------------
-        # Project metadata
-        # ----------------------------------------------
+        # ========================================================
+        # PROJECT METADATA
+        # ========================================================
 
         self.project_metadata = (
             self.loader.get_metadata()
         )
 
-        print("\nProject Metadata:")
+        print(
+            "\nProject Metadata:"
+        )
 
         print(
             "Project Name :",
@@ -196,13 +333,19 @@ class RAGPipeline:
             )
         )
 
+        # ========================================================
+        # SAVE PROJECT METADATA
+        # ========================================================
+
         self.save_project_metadata()
 
-        # ----------------------------------------------
-        # Chunk project
-        # ----------------------------------------------
+        # ========================================================
+        # CHUNK
+        # ========================================================
 
-        print("\nChunking...")
+        print(
+            "\nChunking..."
+        )
 
         chunks = (
             self.chunker.chunk_documents(
@@ -220,9 +363,9 @@ class RAGPipeline:
             f"Generated {len(chunks)} chunks."
         )
 
-        # ----------------------------------------------
-        # Generate embeddings
-        # ----------------------------------------------
+        # ========================================================
+        # EMBEDDINGS
+        # ========================================================
 
         print(
             "\nGenerating embeddings..."
@@ -240,50 +383,89 @@ class RAGPipeline:
                 "No embeddings were generated."
             )
 
-        # ----------------------------------------------
-        # Fresh vector store
-        # ----------------------------------------------
+        # ========================================================
+        # CREATE FRESH VECTOR STORE
+        # ========================================================
 
         print(
             "\nCreating new FAISS index..."
         )
 
-        self.vector_store = VectorStore()
-
         self.vector_store.add_chunks(
             embedded_chunks
         )
 
-        self.vector_store.save()
+        # ========================================================
+        # DIAGNOSTIC: AFTER INDEXING
+        # ========================================================
 
         print(
-            "\nVector database created successfully."
+            "\n========== AFTER INDEXING =========="
         )
-
-        # ----------------------------------------------
-        # Reload retriever
-        # ----------------------------------------------
 
         print(
-            "\nReloading retriever..."
+            "VectorStore chunks:",
+            self.vector_store.size()
         )
-
-        self.retriever = Retriever()
 
         print(
-            "Retriever updated successfully."
+            "VectorStore files:",
+            self.vector_store.get_indexed_files()
         )
 
-        # ----------------------------------------------
-        # Retrieval statistics
-        # ----------------------------------------------
+        print(
+            "VectorStore object:",
+            id(self.vector_store)
+        )
+
+        print(
+            "====================================\n"
+        )
+
+        # ========================================================
+        # SAVE CURRENT PROJECT
+        # ========================================================
+
+        self.vector_store.save(
+            index_path=self.INDEX_PATH,
+            metadata_path=self.METADATA_PATH
+        )
+
+        # ========================================================
+        # CREATE RETRIEVER
+        # ========================================================
+
+        print(
+            "\nCreating retriever..."
+        )
+
+        self._create_retriever()
+
+        if self.retriever is None:
+
+            raise RuntimeError(
+                "Retriever could not be initialized."
+            )
+
+        # ========================================================
+        # RETRIEVAL STATISTICS
+        # ========================================================
 
         statistics = (
-            self.retriever
-            .get_retrieval_statistics()
+            self.get_retrieval_statistics()
         )
 
-        print("\nRetrieval Statistics:")
+        print(
+            "\n=========================================="
+        )
+
+        print(
+            "RETRIEVAL STATISTICS"
+        )
+
+        print(
+            "=========================================="
+        )
 
         print(
             "Indexed Files :",
@@ -299,35 +481,44 @@ class RAGPipeline:
             ]
         )
 
+        print(
+            "=========================================="
+        )
+
+        # ========================================================
+        # INDEXED FILES
+        # ========================================================
+
+        indexed_files = (
+            self.vector_store
+            .get_indexed_files()
+        )
+
+        print(
+            "\nIndexed Files:"
+        )
+
+        for file_path in indexed_files:
+
+            print(
+                " -",
+                file_path
+            )
+
+        print(
+            "\nNew project index created successfully."
+        )
+
         return self.project_metadata
 
-    # ==================================================
-    # Query Classification
-    # ==================================================
+    # ============================================================
+    # QUERY CLASSIFICATION
+    # ============================================================
 
     def classify_query(
         self,
         query: str
     ) -> str:
-        """
-        Decide whether the user is asking about:
-
-        TARGETED
-        --------
-        A particular function, class, file, bug,
-        feature, or behavior.
-
-        PROJECT_WIDE
-        ------------
-        The complete project/codebase or all
-        bugs/errors/files.
-
-        Returns:
-
-        "targeted"
-        or
-        "project_wide"
-        """
 
         normalized_query = (
             query
@@ -335,9 +526,9 @@ class RAGPipeline:
             .lower()
         )
 
-        # ----------------------------------------------
-        # Explicit broad phrases
-        # ----------------------------------------------
+        # --------------------------------------------------------
+        # Explicit project-wide phrases
+        # --------------------------------------------------------
 
         for phrase in (
             self.PROJECT_WIDE_PHRASES
@@ -347,9 +538,9 @@ class RAGPipeline:
 
                 return "project_wide"
 
-        # ----------------------------------------------
-        # Multiple broad review categories
-        # ----------------------------------------------
+        # --------------------------------------------------------
+        # Broad categories
+        # --------------------------------------------------------
 
         broad_categories = (
             "bugs",
@@ -367,18 +558,9 @@ class RAGPipeline:
 
         category_count = sum(
             1
-            for category
-            in broad_categories
-            if category
-            in normalized_query
+            for category in broad_categories
+            if category in normalized_query
         )
-
-        # Example:
-        #
-        # "Give bugs, errors, performance,
-        # security and improvements"
-        #
-        # This strongly suggests broad analysis.
 
         if category_count >= 4:
 
@@ -386,9 +568,9 @@ class RAGPipeline:
 
         return "targeted"
 
-    # ==================================================
-    # Retrieve Context
-    # ==================================================
+    # ============================================================
+    # RETRIEVE CONTEXT
+    # ============================================================
 
     def retrieve_context(
         self,
@@ -397,13 +579,16 @@ class RAGPipeline:
         project_max_chunks: int = 8,
         chunks_per_file: int = 2
     ) -> Dict:
-        """
-        Select retrieval strategy automatically.
-        """
 
         if self.retriever is None:
 
-            self.retriever = Retriever()
+            self._create_retriever()
+
+        if self.retriever is None:
+
+            raise RuntimeError(
+                "Retriever is not available."
+            )
 
         query_type = (
             self.classify_query(
@@ -415,9 +600,9 @@ class RAGPipeline:
             f"\nQuery Type: {query_type}"
         )
 
-        # ----------------------------------------------
-        # Project-wide retrieval
-        # ----------------------------------------------
+        # ========================================================
+        # PROJECT-WIDE
+        # ========================================================
 
         if query_type == "project_wide":
 
@@ -434,9 +619,9 @@ class RAGPipeline:
                 )
             )
 
-        # ----------------------------------------------
-        # Targeted semantic retrieval
-        # ----------------------------------------------
+        # ========================================================
+        # TARGETED
+        # ========================================================
 
         else:
 
@@ -456,9 +641,9 @@ class RAGPipeline:
             "chunks": chunks
         }
 
-    # ==================================================
-    # Generate Prompt
-    # ==================================================
+    # ============================================================
+    # GENERATE PROMPT
+    # ============================================================
 
     def generate_prompt(
         self,
@@ -468,10 +653,6 @@ class RAGPipeline:
         chunks_per_file: int = 2
     ):
 
-        # ----------------------------------------------
-        # Validate query
-        # ----------------------------------------------
-
         if not query or not query.strip():
 
             raise ValueError(
@@ -480,9 +661,9 @@ class RAGPipeline:
 
         query = query.strip()
 
-        # ----------------------------------------------
-        # Check database
-        # ----------------------------------------------
+        # ========================================================
+        # VECTOR DATABASE CHECK
+        # ========================================================
 
         if not self.vector_database_exists():
 
@@ -491,9 +672,9 @@ class RAGPipeline:
                 "Please upload a project first."
             )
 
-        # ----------------------------------------------
-        # Initialize retriever
-        # ----------------------------------------------
+        # ========================================================
+        # RETRIEVER CHECK
+        # ========================================================
 
         if self.retriever is None:
 
@@ -501,11 +682,16 @@ class RAGPipeline:
                 "\nInitializing retriever..."
             )
 
-            self.retriever = Retriever()
+            self.vector_store.load(
+                index_path=self.INDEX_PATH,
+                metadata_path=self.METADATA_PATH
+            )
 
-        # ----------------------------------------------
-        # Retrieve context
-        # ----------------------------------------------
+            self._create_retriever()
+
+        # ========================================================
+        # RETRIEVE
+        # ========================================================
 
         print(
             "\nRetrieving relevant code..."
@@ -533,25 +719,78 @@ class RAGPipeline:
             f"{len(retrieved_chunks)} chunks."
         )
 
-        # ----------------------------------------------
-        # Debug retrieved chunks
-        # ----------------------------------------------
+        # ========================================================
+        # CRITICAL DIAGNOSTIC
+        # ========================================================
+
+        print(
+            "\n========== FINAL RETRIEVAL =========="
+        )
+
+        retrieved_files = set()
+
+        for i, chunk in enumerate(
+            retrieved_chunks,
+            start=1
+        ):
+
+            file_name = chunk.get(
+                "name",
+                "Unknown"
+            )
+
+            path = (
+                chunk.get("relative_path")
+                or chunk.get("path")
+                or "Unknown"
+            )
+
+            retrieved_files.add(
+                path
+            )
+
+            print(
+                f"{i}. "
+                f"{file_name} | "
+                f"{path} | "
+                f"Lines "
+                f"{chunk.get('start_line', '?')}-"
+                f"{chunk.get('end_line', '?')}"
+            )
+
+        print(
+            "\nRetrieved Files:",
+            sorted(retrieved_files)
+        )
+
+        print(
+            "Retrieved File Count:",
+            len(retrieved_files)
+        )
+
+        print(
+            "=====================================\n"
+        )
+
+        # ========================================================
+        # PRINT RETRIEVED CHUNKS
+        # ========================================================
 
         self.print_retrieved_chunks(
             retrieved_chunks
         )
 
-        # ----------------------------------------------
-        # Load project metadata
-        # ----------------------------------------------
+        # ========================================================
+        # PROJECT METADATA
+        # ========================================================
 
         if self.project_metadata is None:
 
             self.load_project_metadata()
 
-        # ----------------------------------------------
-        # Build prompt
-        # ----------------------------------------------
+        # ========================================================
+        # PROMPT
+        # ========================================================
 
         prompt = (
             self.prompt_builder.build_prompt(
@@ -566,11 +805,16 @@ class RAGPipeline:
             f"{query_type} retrieval."
         )
 
+        print(
+            "Prompt Characters:",
+            len(prompt)
+        )
+
         return prompt
 
-    # ==================================================
-    # Debug Retrieved Chunks
-    # ==================================================
+    # ============================================================
+    # PRINT RETRIEVED CHUNKS
+    # ============================================================
 
     def print_retrieved_chunks(
         self,
@@ -585,13 +829,18 @@ class RAGPipeline:
 
             return
 
+        print(
+            f"\nRetrieved "
+            f"{len(retrieved_chunks)} chunks."
+        )
+
         for i, chunk in enumerate(
             retrieved_chunks,
             start=1
         ):
 
             print(
-                f"\nRetrieved Chunk {i}:"
+                f"\nRetrieved Chunk {i}"
             )
 
             print(
@@ -624,9 +873,6 @@ class RAGPipeline:
                 f"{chunk.get('end_line', '?')}"
             )
 
-            # Project-wide retrieval can contain
-            # metadata chunks without a distance.
-
             distance = chunk.get(
                 "distance"
             )
@@ -638,16 +884,13 @@ class RAGPipeline:
                     distance
                 )
 
-    # ==================================================
-    # Save Project Metadata
-    # ==================================================
+    # ============================================================
+    # SAVE PROJECT METADATA
+    # ============================================================
 
     def save_project_metadata(
         self,
-        metadata_path=(
-            "vector_db/"
-            "project_metadata.json"
-        )
+        metadata_path=PROJECT_METADATA_PATH
     ):
 
         if self.project_metadata is None:
@@ -678,19 +921,16 @@ class RAGPipeline:
             )
 
         print(
-            "Project metadata saved."
+            "Current project metadata saved."
         )
 
-    # ==================================================
-    # Load Project Metadata
-    # ==================================================
+    # ============================================================
+    # LOAD PROJECT METADATA
+    # ============================================================
 
     def load_project_metadata(
         self,
-        metadata_path=(
-            "vector_db/"
-            "project_metadata.json"
-        )
+        metadata_path=PROJECT_METADATA_PATH
     ):
 
         if not os.path.exists(
@@ -710,9 +950,7 @@ class RAGPipeline:
             ) as file:
 
                 self.project_metadata = (
-                    json.load(
-                        file
-                    )
+                    json.load(file)
                 )
 
             print(
@@ -729,16 +967,16 @@ class RAGPipeline:
             print(
                 "Could not load "
                 "project metadata:",
-                str(e)
+                repr(e)
             )
 
             self.project_metadata = None
 
             return None
 
-    # ==================================================
-    # Vector Database Exists
-    # ==================================================
+    # ============================================================
+    # VECTOR DATABASE EXISTS
+    # ============================================================
 
     def vector_database_exists(
         self
@@ -746,17 +984,38 @@ class RAGPipeline:
 
         return (
             os.path.exists(
-                "vector_db/faiss.index"
+                self.INDEX_PATH
             )
             and
             os.path.exists(
-                "vector_db/metadata.pkl"
+                self.METADATA_PATH
             )
         )
 
-    # ==================================================
-    # Get Project Metadata
-    # ==================================================
+    # ============================================================
+    # RETRIEVAL STATISTICS
+    # ============================================================
+
+    def get_retrieval_statistics(
+        self
+    ) -> Dict:
+
+        total_chunks = (
+            self.vector_store.size()
+        )
+
+        total_files = (
+            self.vector_store.file_count()
+        )
+
+        return {
+            "total_chunks": total_chunks,
+            "total_indexed_files": total_files
+        }
+
+    # ============================================================
+    # PROJECT METADATA GETTER
+    # ============================================================
 
     def get_project_metadata(
         self
@@ -768,10 +1027,23 @@ class RAGPipeline:
 
         return self.project_metadata
 
-    
-# ============================================================
-# Local Test
-# ============================================================
+    # ============================================================
+    # CURRENT INDEXED FILES
+    # ============================================================
+
+    def get_indexed_files(
+        self
+    ) -> List[str]:
+
+        return (
+            self.vector_store
+            .get_indexed_files()
+        )
+
+
+# ================================================================
+# LOCAL TEST
+# ================================================================
 
 if __name__ == "__main__":
 
@@ -856,9 +1128,22 @@ if __name__ == "__main__":
             ]
         )
 
-    # --------------------------------------------------------
+        print(
+            "\nIndexed Files:"
+        )
+
+        for file_path in (
+            rag.get_indexed_files()
+        ):
+
+            print(
+                " -",
+                file_path
+            )
+
+    # ============================================================
     # Interactive testing
-    # --------------------------------------------------------
+    # ============================================================
 
     while rag.vector_database_exists():
 
@@ -868,9 +1153,7 @@ if __name__ == "__main__":
         )
 
         if (
-            question
-            .strip()
-            .lower()
+            question.strip().lower()
             == "exit"
         ):
 
@@ -895,9 +1178,6 @@ if __name__ == "__main__":
                 "\nPrompt generated successfully."
             )
 
-            # Do not print the entire prompt during normal
-            # testing because it may be very large.
-
             print(
                 "Prompt characters:",
                 len(prompt)
@@ -907,5 +1187,5 @@ if __name__ == "__main__":
 
             print(
                 "Error:",
-                str(e)
+                repr(e)
             )
