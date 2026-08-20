@@ -244,7 +244,14 @@ def build_groq_schema(
             #
             # Optional Pydantic fields remain optional in value
             # semantics because their schema still contains null.
-            required = list(properties.keys())
+            required = [
+                key
+                for key in properties.keys()
+                if key not in {
+                    "user_requirements",
+                    "corrected_code",
+                    }
+                ]
 
             return {
                 "type": "object",

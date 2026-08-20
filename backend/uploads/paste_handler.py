@@ -1,4 +1,5 @@
 from pathlib import Path
+import shutil
 
 
 class PasteHandler:
@@ -9,29 +10,121 @@ class PasteHandler:
     ):
         self.upload_dir = upload_dir
 
+    # ========================================================
+    # SAVE PASTED CODE
+    # ========================================================
+
     def save_code(
         self,
         code: str,
         filename: str
     ):
+        """
+        Save pasted source code as a NEW standalone project.
 
-        project_folder = self.upload_dir / "pasted_code"
+        Every paste operation replaces the previous pasted
+        project completely.
+        """
+
+        # ====================================================
+        # VALIDATE INPUT
+        # ====================================================
+
+        if not filename or not filename.strip():
+            raise ValueError(
+                "Filename cannot be empty."
+            )
+
+        if not code or not code.strip():
+            raise ValueError(
+                "Code cannot be empty."
+            )
+
+        # ====================================================
+        # PASTED CODE DIRECTORY
+        # ====================================================
+
+        project_folder = (
+            self.upload_dir / "pasted_code"
+        )
+
+        # ====================================================
+        # REMOVE PREVIOUS PASTED PROJECT
+        # ====================================================
+
+        if project_folder.exists():
+
+            print(
+                "\nRemoving previous pasted-code project..."
+            )
+
+            shutil.rmtree(
+                project_folder
+            )
+
+        # ====================================================
+        # CREATE FRESH DIRECTORY
+        # ====================================================
 
         project_folder.mkdir(
             parents=True,
             exist_ok=True
         )
 
-        file_path = project_folder / filename
+        # ====================================================
+        # SANITIZE FILE NAME
+        # ====================================================
+
+        safe_filename = Path(
+            filename.strip()
+        ).name
+
+        if not safe_filename:
+            raise ValueError(
+                "Invalid filename."
+            )
+
+        # ====================================================
+        # CREATE FILE
+        # ====================================================
+
+        file_path = (
+            project_folder / safe_filename
+        )
 
         with open(
             file_path,
             "w",
             encoding="utf-8"
-        ) as f:
-            f.write(code)
+        ) as file:
+
+            file.write(
+                code
+            )
+
+        # ====================================================
+        # LOG
+        # ====================================================
+
+        print(
+            "\nProcessing pasted code:",
+            safe_filename
+        )
+
+        print(
+            "Created:",
+            file_path
+        )
+
+        print(
+            "Fresh paste project created."
+        )
+
+        # ====================================================
+        # RETURN
+        # ====================================================
 
         return {
             "project_folder": project_folder,
-            "file_name": filename
+            "file_name": safe_filename
         }

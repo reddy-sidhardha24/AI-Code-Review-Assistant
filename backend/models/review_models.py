@@ -42,7 +42,8 @@ class PasteCodeRequest(BaseModel):
 
 class ProjectInfo(BaseModel):
 
-    name: Optional[str] = None
+    # Required property, but nullable.
+    name: Optional[str]
 
     languages: List[str] = Field(
         default_factory=list
@@ -73,6 +74,17 @@ class FileAnalyzed(BaseModel):
 
 
 # ============================================================
+# CORRECTED CODE
+# ============================================================
+
+class CorrectedCode(BaseModel):
+
+    file_name: str
+
+    code: str
+
+
+# ============================================================
 # BUG FINDING
 # ============================================================
 
@@ -95,20 +107,19 @@ class BugFinding(BaseModel):
 
     file: str
 
-    line: Optional[int] = None
+    line: Optional[int]
 
-    line_range: Optional[str] = None
+    line_range: Optional[str]
 
-    evidence: str = ""
+    evidence: str
 
     description: str
 
-    impact: str = ""
+    impact: str
 
-    fix: str = ""
+    fix: str
 
     confidence: int = Field(
-        default=0,
         ge=0,
         le=100
     )
@@ -126,20 +137,19 @@ class ErrorFinding(BaseModel):
 
     file: str
 
-    line: Optional[int] = None
+    line: Optional[int]
 
-    line_range: Optional[str] = None
+    line_range: Optional[str]
 
-    evidence: str = ""
+    evidence: str
 
     description: str
 
-    impact: str = ""
+    impact: str
 
-    fix: str = ""
+    fix: str
 
     confidence: int = Field(
-        default=0,
         ge=0,
         le=100
     )
@@ -151,24 +161,23 @@ class ErrorFinding(BaseModel):
 
 class PerformanceIssue(BaseModel):
 
-    title: str = ""
+    title: str
 
-    description: str = ""
+    description: str
 
-    file: str = ""
+    file: Optional[str]
 
-    line: Optional[int] = None
+    line: Optional[int]
 
-    line_range: Optional[str] = None
+    line_range: Optional[str]
 
-    evidence: str = ""
+    evidence: Optional[str]
 
-    impact: str = ""
+    impact: Optional[str]
 
-    suggestion: str = ""
+    suggestion: Optional[str]
 
     confidence: int = Field(
-        default=0,
         ge=0,
         le=100
     )
@@ -180,9 +189,9 @@ class PerformanceIssue(BaseModel):
 
 class PerformanceInfo(BaseModel):
 
-    time_complexity: str = ""
+    time_complexity: str
 
-    space_complexity: str = ""
+    space_complexity: str
 
     issues: List[
         PerformanceIssue
@@ -201,17 +210,17 @@ class SecurityFinding(BaseModel):
 
     description: str
 
-    file: Optional[str] = None
+    file: Optional[str]
 
-    line: Optional[int] = None
+    line: Optional[int]
 
-    line_range: Optional[str] = None
+    line_range: Optional[str]
 
-    evidence: Optional[str] = None
+    evidence: Optional[str]
 
-    impact: Optional[str] = None
+    impact: Optional[str]
 
-    suggestion: Optional[str] = None
+    suggestion: Optional[str]
 
     severity: Optional[
         Literal[
@@ -220,10 +229,9 @@ class SecurityFinding(BaseModel):
             "medium",
             "low"
         ]
-    ] = None
+    ]
 
     confidence: Optional[int] = Field(
-        default=None,
         ge=0,
         le=100
     )
@@ -257,20 +265,19 @@ class CodeQualityFinding(BaseModel):
 
     description: str
 
-    file: Optional[str] = None
+    file: Optional[str]
 
-    line: Optional[int] = None
+    line: Optional[int]
 
-    line_range: Optional[str] = None
+    line_range: Optional[str]
 
-    evidence: Optional[str] = None
+    evidence: Optional[str]
 
-    impact: Optional[str] = None
+    impact: Optional[str]
 
-    suggestion: Optional[str] = None
+    suggestion: Optional[str]
 
     confidence: Optional[int] = Field(
-        default=None,
         ge=0,
         le=100
     )
@@ -301,21 +308,61 @@ class CodeQualityInfo(BaseModel):
 
 class StructuredReview(BaseModel):
 
+    # --------------------------------------------------------
+    # PROJECT
+    # --------------------------------------------------------
+
     project: ProjectInfo
 
+    # --------------------------------------------------------
+    # USER REVIEW REQUEST
+    # --------------------------------------------------------
+
     question: str
+
+    user_requirements: List[str] = Field(
+        default_factory=list
+    )
 
     review_types: List[str] = Field(
         default_factory=list
     )
 
-    answer_summary: str = ""
+    # --------------------------------------------------------
+    # SUMMARY
+    # --------------------------------------------------------
+
+    answer_summary: str
+
+    # --------------------------------------------------------
+    # FILE INFORMATION
+    # --------------------------------------------------------
 
     files_analyzed: List[
         FileAnalyzed
     ] = Field(
         default_factory=list
     )
+
+    # --------------------------------------------------------
+    # CODE STRUCTURE
+    # --------------------------------------------------------
+
+    key_methods: List[str] = Field(
+        default_factory=list
+    )
+
+    key_classes: List[str] = Field(
+        default_factory=list
+    )
+
+    libraries: List[str] = Field(
+        default_factory=list
+    )
+
+    # --------------------------------------------------------
+    # FINDINGS
+    # --------------------------------------------------------
 
     bugs: List[
         BugFinding
@@ -341,26 +388,32 @@ class StructuredReview(BaseModel):
         CodeQualityInfo
     ] = None
 
-    key_methods: List[str] = Field(
+    # --------------------------------------------------------
+    # CORRECTED CODE
+    # --------------------------------------------------------
+
+    corrected_code: List[
+        CorrectedCode
+    ] = Field(
         default_factory=list
     )
 
-    key_classes: List[str] = Field(
-        default_factory=list
-    )
-
-    libraries: List[str] = Field(
-        default_factory=list
-    )
+    # --------------------------------------------------------
+    # OUTPUT / SCORING
+    # --------------------------------------------------------
 
     expected_output: Optional[str] = None
 
-    score: Optional[float] = None
-
-    confidence: int = Field(
-        default=0,
+    score: Optional[float] = Field(
+        default=None,
         ge=0,
         le=100
     )
 
-    final_verdict: str = ""
+    confidence: Optional[int] = Field(
+        default=None,
+        ge=0,
+        le=100
+    )
+
+    final_verdict: str

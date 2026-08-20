@@ -7,7 +7,7 @@ import os
 import json
 
 from pathlib import Path
-from typing import List, Any
+from typing import List, Any, Dict
 
 from dotenv import load_dotenv
 
@@ -35,7 +35,8 @@ from services.review_service import ReviewService
 
 from models.review_models import (
     ReviewRequest,
-    StructuredReview
+    StructuredReview,
+    FileAnalyzed
 )
 
 
@@ -116,7 +117,7 @@ review_service = ReviewService(
 
 app = FastAPI(
     title="AI Code Review Assistant",
-    version="1.3.0"
+    version="1.4.0"
 )
 
 
@@ -159,23 +160,8 @@ def build_groq_schema(
     model: Any
 ) -> dict:
     """
-    Convert a Pydantic model schema into a schema
-    compatible with Groq Strict Structured Outputs.
-
-    Important Groq requirements:
-
-    - Every object must have:
-        additionalProperties: false
-
-    - Every property must be required.
-
-    - Optional Pydantic fields are represented using
-      null through anyOf.
-
-    - Pydantic constraints that are not necessary for
-      generation are removed.
-
-    The final response is still validated by Pydantic.
+    Convert Pydantic schema into Groq-compatible
+    strict JSON schema.
     """
 
     raw_schema = model.model_json_schema()
@@ -185,9 +171,8 @@ def build_groq_schema(
         {}
     )
 
-
     # ========================================================
-    # RESOLVE $REF
+    # RESOLVE REFERENCES
     # ========================================================
 
     def resolve_reference(
@@ -216,13 +201,11 @@ def build_groq_schema(
 
                 return {}
 
-
             return {
                 key: resolve_reference(item)
                 for key, item in value.items()
                 if key != "$defs"
             }
-
 
         if isinstance(value, list):
 
@@ -231,17 +214,14 @@ def build_groq_schema(
                 for item in value
             ]
 
-
         return value
-
 
     schema = resolve_reference(
         raw_schema
     )
 
-
     # ========================================================
-    # SANITIZE SCHEMA FOR GROQ
+    # SANITIZE
     # ========================================================
 
     allowed_keys = {
@@ -255,7 +235,6 @@ def build_groq_schema(
         "description"
     }
 
-
     def sanitize(
         value: Any
     ) -> Any:
@@ -267,7 +246,6 @@ def build_groq_schema(
                 for item in value
             ]
 
-
         if not isinstance(
             value,
             dict
@@ -275,9 +253,7 @@ def build_groq_schema(
 
             return value
 
-
         result = {}
-
 
         # ----------------------------------------------------
         # OBJECT
@@ -293,18 +269,12 @@ def build_groq_schema(
             )
 
             result["properties"] = {
-
                 key: sanitize(
                     property_schema
                 )
-
                 for key, property_schema
                 in properties.items()
-
             }
-
-            # Groq strict mode requires every
-            # property to be required.
 
             result["required"] = list(
                 properties.keys()
@@ -321,7 +291,6 @@ def build_groq_schema(
                 )
 
             return result
-
 
         # ----------------------------------------------------
         # ARRAY
@@ -345,19 +314,15 @@ def build_groq_schema(
 
             return result
 
-
         # ----------------------------------------------------
-        # UNION / OPTIONAL
+        # UNION
         # ----------------------------------------------------
 
         if "anyOf" in value:
 
             result["anyOf"] = [
-
                 sanitize(item)
-
                 for item in value["anyOf"]
-
             ]
 
             if "description" in value:
@@ -367,7 +332,6 @@ def build_groq_schema(
                 )
 
             return result
-
 
         # ----------------------------------------------------
         # ENUM / PRIMITIVE
@@ -381,9 +345,7 @@ def build_groq_schema(
                     value[key]
                 )
 
-
         return result
-
 
     return sanitize(
         schema
@@ -391,7 +353,7 @@ def build_groq_schema(
 
 
 # ============================================================
-# BUILD REVIEW SCHEMA ONCE
+# BUILD SCHEMA
 # ============================================================
 
 GROQ_REVIEW_SCHEMA = build_groq_schema(
@@ -400,7 +362,7 @@ GROQ_REVIEW_SCHEMA = build_groq_schema(
 
 
 # ============================================================
-# CLEAN LLM JSON
+# CLEAN JSON
 # ============================================================
 
 def clean_json_response(
@@ -413,7 +375,6 @@ def clean_json_response(
 
     content = content.strip()
 
-
     if content.startswith(
         "```json"
     ):
@@ -421,7 +382,6 @@ def clean_json_response(
         content = content[
             len("```json"):
         ]
-
 
     elif content.startswith(
         "```"
@@ -431,7 +391,6 @@ def clean_json_response(
             len("```"):
         ]
 
-
     if content.endswith(
         "```"
     ):
@@ -440,8 +399,203 @@ def clean_json_response(
             :-len("```")
         ]
 
-
     return content.strip()
+
+
+# ============================================================
+# BUILD TRUSTED FILE LIST
+# ============================================================
+
+def build_trusted_files_analyzed(
+    retrieved_chunks: List[Dict]
+) -> List[FileAnalyzed]:
+    """
+    IMPORTANT:
+
+    files_analyzed must NEVER come from the LLM.
+
+    It is derived exclusively from the chunks that were
+    actually retrieved for THIS review.
+
+    This prevents stale filenames from previous projects
+    appearing in the final response.
+    """
+
+    files = []
+
+    seen = set()
+
+    for chunk in retrieved_chunks:
+
+        file_name = (
+            chunk.get("name")
+            or chunk.get("file_name")
+            or "Unknown"
+        )
+
+        path = (
+            chunk.get("relative_path")
+            or chunk.get("path")
+            or file_name
+        )
+
+        language = (
+            chunk.get("language")
+            or "Unknown"
+        )
+
+        identity = (
+            str(path).lower()
+        )
+
+        if identity in seen:
+
+            continue
+
+        seen.add(
+            identity
+        )
+
+        files.append(
+            FileAnalyzed(
+                file_name=str(
+                    file_name
+                ),
+
+                path=str(
+                    path
+                ),
+
+                language=str(
+                    language
+                )
+            )
+        )
+
+    return files
+
+
+# ============================================================
+# BUILD TRUSTED PROJECT INFO
+# ============================================================
+
+def build_trusted_project_info(
+    retrieved_chunks: List[Dict],
+    existing_project: Any
+):
+    """
+    Project information should preferably come from the
+    current indexed project metadata.
+
+    The LLM should not be trusted to invent project statistics.
+    """
+
+    metadata = {}
+
+    if isinstance(
+        existing_project,
+        dict
+    ):
+
+        metadata = existing_project
+
+    # --------------------------------------------------------
+    # Files represented by CURRENT retrieval
+    # --------------------------------------------------------
+
+    trusted_files = (
+        build_trusted_files_analyzed(
+            retrieved_chunks
+        )
+    )
+
+    # --------------------------------------------------------
+    # Language fallback
+    # --------------------------------------------------------
+
+    languages = []
+
+    for file in trusted_files:
+
+        if (
+            file.language
+            and file.language != "Unknown"
+            and file.language not in languages
+        ):
+
+            languages.append(
+                file.language
+            )
+
+    metadata_languages = metadata.get(
+        "languages",
+        []
+    )
+
+    if isinstance(
+        metadata_languages,
+        dict
+    ):
+
+        metadata_languages = list(
+            metadata_languages.keys()
+        )
+
+    if not languages:
+
+        languages = (
+            metadata_languages
+            if isinstance(
+                metadata_languages,
+                list
+            )
+            else []
+        )
+
+    # --------------------------------------------------------
+    # Project name
+    # --------------------------------------------------------
+
+    project_name = (
+        metadata.get(
+            "project_name"
+        )
+        or metadata.get(
+            "name"
+        )
+        or "Current Project"
+    )
+
+    # --------------------------------------------------------
+    # Total lines
+    # --------------------------------------------------------
+
+    total_lines = metadata.get(
+        "total_lines",
+        0
+    )
+
+    try:
+
+        total_lines = int(
+            total_lines
+        )
+
+    except (
+        TypeError,
+        ValueError
+    ):
+
+        total_lines = 0
+
+    return {
+        "name": project_name,
+        "languages": languages,
+        "total_files": len(
+            trusted_files
+        ),
+        "total_lines": total_lines
+    }
 
 
 # ============================================================
@@ -469,7 +623,6 @@ def validate_findings(
 
             continue
 
-
         if not bug.file.strip():
 
             print(
@@ -479,14 +632,11 @@ def validate_findings(
 
             continue
 
-
         verified_bugs.append(
             bug
         )
 
-
     review.bugs = verified_bugs
-
 
     # ========================================================
     # ERRORS
@@ -505,7 +655,6 @@ def validate_findings(
 
             continue
 
-
         if not error.file.strip():
 
             print(
@@ -515,14 +664,11 @@ def validate_findings(
 
             continue
 
-
         verified_errors.append(
             error
         )
 
-
     review.errors = verified_errors
-
 
     # ========================================================
     # SECURITY COUNT
@@ -533,7 +679,6 @@ def validate_findings(
         review.security.issues_found = len(
             review.security.issues
         )
-
 
     return review
 
@@ -548,7 +693,7 @@ def normalize_review(
 ) -> StructuredReview:
 
     # ========================================================
-    # SUMMARY FALLBACK
+    # SUMMARY
     # ========================================================
 
     if not review.answer_summary.strip():
@@ -569,7 +714,6 @@ def normalize_review(
                 review.security.issues
             )
 
-
         performance_count = 0
 
         if review.performance:
@@ -578,95 +722,92 @@ def normalize_review(
                 review.performance.issues
             )
 
-
         quality_count = 0
 
         if review.code_quality:
 
             quality_count = (
-
                 len(
                     review.code_quality.observations
                 )
-
                 +
-
                 len(
                     review.code_quality.suggestions
                 )
-
             )
 
-
         findings = []
-
 
         if bug_count:
 
             findings.append(
                 f"{bug_count} bug"
-                + (
+                +
+                (
                     "s"
                     if bug_count != 1
                     else ""
                 )
             )
 
-
         if error_count:
 
             findings.append(
                 f"{error_count} error"
-                + (
+                +
+                (
                     "s"
                     if error_count != 1
                     else ""
                 )
             )
 
-
         if security_count:
 
             findings.append(
                 f"{security_count} security issue"
-                + (
+                +
+                (
                     "s"
                     if security_count != 1
                     else ""
                 )
             )
 
-
         if performance_count:
 
             findings.append(
                 f"{performance_count} performance concern"
-                + (
+                +
+                (
                     "s"
                     if performance_count != 1
                     else ""
                 )
             )
 
-
         if quality_count:
 
             findings.append(
                 f"{quality_count} code-quality finding"
-                + (
+                +
+                (
                     "s"
                     if quality_count != 1
                     else ""
                 )
             )
 
-
         if findings:
 
             review.answer_summary = (
                 "The review identified "
-                + ", ".join(findings)
-                + ". See the detailed findings below."
+                +
+                ", ".join(
+                    findings
+                )
+                +
+                ". See the detailed findings below."
             )
 
         else:
@@ -677,9 +818,8 @@ def normalize_review(
                 "for the requested analysis."
             )
 
-
     # ========================================================
-    # FINAL VERDICT FALLBACK
+    # FINAL VERDICT
     # ========================================================
 
     if not review.final_verdict.strip():
@@ -692,7 +832,6 @@ def normalize_review(
                 review.security.issues
             )
 
-
         performance_count = 0
 
         if review.performance:
@@ -701,48 +840,31 @@ def normalize_review(
                 review.performance.issues
             )
 
-
         quality_count = 0
 
         if review.code_quality:
 
             quality_count = (
-
                 len(
                     review.code_quality.observations
                 )
-
                 +
-
                 len(
                     review.code_quality.suggestions
                 )
-
             )
 
-
         total_findings = (
-
             len(review.bugs)
-
             +
-
             len(review.errors)
-
             +
-
             security_count
-
             +
-
             performance_count
-
             +
-
             quality_count
-
         )
-
 
         if total_findings == 0:
 
@@ -754,26 +876,19 @@ def normalize_review(
         else:
 
             review.final_verdict = (
-
                 f"The review identified "
                 f"{total_findings} supported finding"
-
                 +
-
                 (
                     "s"
                     if total_findings != 1
                     else ""
                 )
-
                 +
-
                 " across the requested analysis areas. "
                 "The highest-severity findings should be "
                 "addressed before production use."
-
             )
-
 
     # ========================================================
     # SECURITY COUNT
@@ -785,28 +900,21 @@ def normalize_review(
             review.security.issues
         )
 
-
     # ========================================================
     # METHODS
     # ========================================================
 
     review.key_methods = list(
         dict.fromkeys(
-
             method.strip()
-
             for method in review.key_methods
-
             if isinstance(
                 method,
                 str
             )
-
             and method.strip()
-
         )
     )
-
 
     # ========================================================
     # CLASSES
@@ -814,21 +922,15 @@ def normalize_review(
 
     review.key_classes = list(
         dict.fromkeys(
-
             item.strip()
-
             for item in review.key_classes
-
             if isinstance(
                 item,
                 str
             )
-
             and item.strip()
-
         )
     )
-
 
     # ========================================================
     # LIBRARIES
@@ -836,30 +938,23 @@ def normalize_review(
 
     review.libraries = list(
         dict.fromkeys(
-
             item.strip()
-
             for item in review.libraries
-
             if isinstance(
                 item,
                 str
             )
-
             and item.strip()
-
         )
     )
 
-
     # ========================================================
-    # PERFORMANCE CONSISTENCY
+    # PERFORMANCE
     # ========================================================
 
     if review.performance:
 
         performance_text = ""
-
 
         for issue in (
             review.performance.issues
@@ -889,53 +984,35 @@ def normalize_review(
                 )
             )
 
-
         performance_text = (
             performance_text.lower()
         )
 
-
         quadratic_indicators = [
-
             "o(n^2)",
-
             "o(n²)",
-
             "quadratic",
-
             "nested loop",
-
             "nested loops",
-
             "quadratic time"
-
         ]
 
-
-        quadratic_detected = any(
-
+        if any(
             indicator
             in performance_text
-
             for indicator
             in quadratic_indicators
-
-        )
-
-
-        if quadratic_detected:
+        ):
 
             review.performance.time_complexity = (
                 "O(n²)"
             )
-
 
     # ========================================================
     # CONFIDENCE
     # ========================================================
 
     confidences = []
-
 
     for bug in review.bugs:
 
@@ -945,7 +1022,6 @@ def normalize_review(
                 bug.confidence
             )
 
-
     for error in review.errors:
 
         if error.confidence > 0:
@@ -953,7 +1029,6 @@ def normalize_review(
             confidences.append(
                 error.confidence
             )
-
 
     if review.performance:
 
@@ -967,36 +1042,29 @@ def normalize_review(
                     issue.confidence
                 )
 
-
     if confidences:
 
         review.confidence = round(
-
-            sum(confidences)
-
+            sum(
+                confidences
+            )
             /
-
-            len(confidences)
-
+            len(
+                confidences
+            )
         )
 
-
     elif (
-
         review.bugs
-
         or review.errors
-
         or (
             review.security
             and review.security.issues
         )
-
         or (
             review.performance
             and review.performance.issues
         )
-
         or (
             review.code_quality
             and (
@@ -1005,23 +1073,19 @@ def normalize_review(
                 review.code_quality.suggestions
             )
         )
-
     ):
 
         review.confidence = 80
 
-
     else:
 
         review.confidence = 0
-
 
     # ========================================================
     # QUESTION
     # ========================================================
 
     review.question = question
-
 
     return review
 
@@ -1034,16 +1098,12 @@ def normalize_review(
 def home():
 
     return {
-
         "success": True,
-
         "message": (
             "AI Code Review Assistant "
             "Backend Running Successfully"
         ),
-
-        "version": "1.3.0"
-
+        "version": "1.4.0"
     }
 
 
@@ -1059,26 +1119,18 @@ def project_info():
         .get_project_metadata()
     )
 
-
     if not metadata:
 
         raise HTTPException(
-
             status_code=404,
-
             detail=(
                 "No project is currently indexed."
             )
-
         )
 
-
     return {
-
         "success": True,
-
         "project": metadata
-
     }
 
 
@@ -1096,30 +1148,23 @@ async def upload_project(
         if not file.filename:
 
             raise HTTPException(
-
                 status_code=400,
-
                 detail=(
                     "Please select a ZIP project."
                 )
-
             )
-
 
         if not file.filename.lower().endswith(
             ".zip"
         ):
 
             raise HTTPException(
-
                 status_code=400,
-
                 detail=(
-                    "Only ZIP project files are supported."
+                    "Only ZIP project files "
+                    "are supported."
                 )
-
             )
-
 
         return await (
             upload_service
@@ -1128,11 +1173,9 @@ async def upload_project(
             )
         )
 
-
     except HTTPException:
 
         raise
-
 
     except Exception as e:
 
@@ -1141,17 +1184,12 @@ async def upload_project(
             repr(e)
         )
 
-
         raise HTTPException(
-
             status_code=500,
-
             detail=(
                 "Failed to upload project."
             )
-
         )
-
 
     finally:
 
@@ -1178,16 +1216,12 @@ async def upload_files(
         if not files:
 
             raise HTTPException(
-
                 status_code=400,
-
                 detail=(
                     "Please select at least "
                     "one source file."
                 )
-
             )
-
 
         return await (
             upload_service
@@ -1196,11 +1230,9 @@ async def upload_files(
             )
         )
 
-
     except HTTPException:
 
         raise
-
 
     except Exception as e:
 
@@ -1209,17 +1241,12 @@ async def upload_files(
             repr(e)
         )
 
-
         raise HTTPException(
-
             status_code=500,
-
             detail=(
                 "Failed to upload source files."
             )
-
         )
-
 
     finally:
 
@@ -1253,46 +1280,56 @@ def paste_code(
             data.code.strip()
         )
 
-
         if not filename:
 
             raise HTTPException(
-
                 status_code=400,
-
                 detail=(
                     "Filename cannot be empty."
                 )
-
             )
-
 
         if not code:
 
             raise HTTPException(
-
                 status_code=400,
-
                 detail=(
                     "Code cannot be empty."
                 )
-
             )
 
-
-        return (
+        result = (
             upload_service
             .process_paste_code(
-                code=code,
-                filename=filename
+            code=code,
+            filename=filename
             )
-        )
-
+        )    
+        print(
+            "\n========== AFTER PASTE INDEX =========="
+            )
+        print(
+            "Indexed Files:",
+            rag_pipeline.get_indexed_files()
+            )
+        print(
+            "Indexed File Count:",
+            len(
+                rag_pipeline.get_indexed_files()
+                )
+            )
+        print(
+            "Indexed Chunks:",
+            rag_pipeline.vector_store.size()
+            )
+        print(
+            "=======================================\n"
+            )
+        return result
 
     except HTTPException:
 
         raise
-
 
     except Exception as e:
 
@@ -1301,15 +1338,11 @@ def paste_code(
             repr(e)
         )
 
-
         raise HTTPException(
-
             status_code=500,
-
             detail=(
                 "Failed to process pasted code."
             )
-
         )
 
 
@@ -1332,20 +1365,15 @@ def review_project(
             data.question.strip()
         )
 
-
         if not question:
 
             raise HTTPException(
-
                 status_code=400,
-
                 detail=(
                     "Review question "
                     "cannot be empty."
                 )
-
             )
-
 
         # ====================================================
         # VECTOR DATABASE
@@ -1357,75 +1385,182 @@ def review_project(
         ):
 
             raise HTTPException(
-
                 status_code=400,
-
                 detail=(
                     "Please upload a "
                     "project first."
                 )
-
             )
-
 
         # ====================================================
         # REVIEW TYPES
         # ====================================================
 
         detected_modes = (
-
             rag_pipeline
             .prompt_builder
             .detect_review_modes(
                 question
             )
-
         )
-
 
         print(
             "\nDetected Review Types:",
             detected_modes
         )
 
+        # ====================================================
+        # RETRIEVE FIRST
+        # ====================================================
+
+        print(
+            "\nRetrieving relevant code..."
+        )
+        
+        print(
+            "\n========== REVIEW VECTOR STATE =========="
+        )
+
+        print(
+            "Indexed Files:",
+            rag_pipeline.get_indexed_files()
+            )
+
+        print(
+            "Indexed File Count:",
+            len(
+                rag_pipeline.get_indexed_files()
+            )
+        )
+
+        print(
+            "Indexed Chunks:",
+            rag_pipeline.vector_store.size()
+        )
+
+        print(
+            "=========================================\n"
+        )
+
+        retrieval = (
+            rag_pipeline
+            .retrieve_context(
+                query=question
+            )
+        )
+
+        retrieved_chunks = (
+            retrieval.get(
+                "chunks",
+                []
+            )
+        )
+
+        query_type = retrieval.get(
+            "query_type",
+            "targeted"
+        )
+
+        print(
+            "\nReview Query Type:",
+            query_type
+        )
+
+        print(
+            "Retrieved Chunks:",
+            len(
+                retrieved_chunks
+            )
+        )
 
         # ====================================================
-        # RAG PROMPT
+        # TRUSTED FILES
+        # ====================================================
+
+        trusted_files = (
+            build_trusted_files_analyzed(
+                retrieved_chunks
+            )
+        )
+
+        print(
+            "\n========== TRUSTED CURRENT FILES =========="
+        )
+
+        for file_info in trusted_files:
+
+            print(
+                file_info.file_name,
+                "|",
+                file_info.path,
+                "|",
+                file_info.language
+            )
+
+        print(
+            "Trusted File Count:",
+            len(trusted_files)
+        )
+
+        print(
+            "===========================================\n"
+        )
+
+        # ====================================================
+        # NO RETRIEVED CODE
+        # ====================================================
+
+        if not retrieved_chunks:
+
+            raise HTTPException(
+                status_code=502,
+                detail=(
+                    "No relevant source code "
+                    "was retrieved for this review."
+                )
+            )
+
+        # ====================================================
+        # GENERATE PROMPT FROM SAME RETRIEVAL
         # ====================================================
 
         prompt = (
-
             rag_pipeline
-            .generate_prompt(
-                query=question
+            .prompt_builder
+            .build_prompt(
+                query=question,
+                retrieved_chunks=retrieved_chunks,
+                project_metadata=(
+                    rag_pipeline
+                    .get_project_metadata()
+                )
             )
-
         )
-
 
         print(
             "\nPrompt generated successfully."
         )
-
 
         print(
             "Prompt Characters:",
             len(prompt)
         )
 
-
         print(
             "Estimated Prompt Tokens:",
             len(prompt) // 4
         )
 
-
         # ====================================================
-        # GROQ STRUCTURED OUTPUT
+        # GROQ
         # ====================================================
+        print("\n========== PROMPT DEBUG ==========")
+        print("Prompt characters:", len(prompt))
+        print("Prompt preview:")
+        print(prompt[:3000])
+        print("==================================")
 
         response = (
-
             client
             .chat
             .completions
@@ -1438,123 +1573,103 @@ def review_project(
                 temperature=0.1,
 
                 reasoning_effort="low",
-
+                max_completion_tokens=3000,
                 response_format={
-
                     "type": "json_schema",
-
                     "json_schema": {
-
                         "name": (
                             "structured_code_review"
                         ),
-
                         "strict": True,
-
                         "schema": (
                             GROQ_REVIEW_SCHEMA
                         )
-
                     }
-
                 },
 
                 messages=[
-
                     {
-
                         "role": "system",
-
                         "content": (
+                            "You are a senior software engineer "
+                            "performing a grounded code review. "
 
-                            "You are an expert senior "
-                            "software engineer performing "
-                            "a grounded project-wide code "
-                            "review. "
+                            "Analyze ONLY the source code provided "
+                            "in the user prompt. "
 
-                            "Analyze ONLY the supplied "
-                            "project metadata and retrieved "
-                            "source code. "
+                            "Every finding must be supported by "
+                            "the supplied source code. "
 
-                            "Every finding must be grounded "
-                            "in the supplied code. "
+                            "Do not invent files, line numbers, "
+                            "methods, classes, libraries, "
+                            "vulnerabilities, or statistics. "
 
-                            "Do not invent files, line "
-                            "numbers, methods, classes, "
-                            "libraries, or vulnerabilities. "
+                            "Return EVERY property required by "
+                            "the JSON schema. Never omit a property. "
 
-                            "If an analysis category has "
-                            "no supported finding, return "
-                            "an empty array for that category. "
+                            "For empty finding sections, return "
+                            "empty arrays or the required empty "
+                            "object. "
 
-                            "Return the complete structured "
-                            "review required by the supplied "
-                            "schema."
+                            "For user_requirements, return an "
+                            "array of strings extracted only from "
+                            "the user's review question. "
 
-                        )
+                            "For corrected_code, return an array. "
+                            "If no safe correction is available, "
+                            "return an empty array. "
 
-                    },
+                            "For every finding, use exact evidence "
+                            "from the supplied source code. "
 
+                            "Do not rewrite unrelated code. "
+
+                            "Keep the review accurate, concise, "
+                            "and grounded in the supplied code."
+                            )
+                        },
                     {
-
                         "role": "user",
-
                         "content": prompt
-
-                    }
-
-                ]
-
+                        }
+                    ]
             )
-
         )
-
 
         # ====================================================
         # RAW RESPONSE
         # ====================================================
 
         raw_answer = (
-
             response
             .choices[0]
             .message
             .content
-
         )
-
 
         if not raw_answer:
 
             raise HTTPException(
-
                 status_code=502,
-
                 detail=(
                     "AI model returned "
                     "an empty response."
                 )
-
             )
-
 
         print(
             "\nStructured AI response received."
         )
-
 
         # ====================================================
         # CLEAN
         # ====================================================
 
         cleaned_answer = (
-
             clean_json_response(
                 raw_answer
             )
-
         )
-
 
         # ====================================================
         # PARSE
@@ -1566,45 +1681,70 @@ def review_project(
                 cleaned_answer
             )
 
-
         except json.JSONDecodeError as e:
 
             print(
                 "\nINVALID GROQ JSON"
             )
 
-
             print(
                 cleaned_answer
             )
-
 
             print(
                 "\nJSON ERROR:",
                 str(e)
             )
 
-
             raise HTTPException(
-
                 status_code=502,
-
                 detail=(
                     "The AI model returned "
                     "invalid JSON."
                 )
-
             )
 
+        # ====================================================
+        # CRITICAL SECURITY / ACCURACY FIX
+        # ====================================================
+        #
+        # NEVER TRUST LLM FILE LIST.
+        #
+        # The backend owns this field.
+        #
+        # ====================================================
+
+        review_json[
+            "files_analyzed"
+        ] = [
+            file_info.model_dump()
+            for file_info
+            in trusted_files
+        ]
 
         # ====================================================
-        # FORCE TRUSTED APPLICATION FIELDS
+        # TRUSTED PROJECT INFORMATION
+        # ====================================================
+
+        review_json[
+            "project"
+        ] = build_trusted_project_info(
+            retrieved_chunks,
+            rag_pipeline
+            .get_project_metadata()
+        )
+
+        # ====================================================
+        # TRUSTED QUESTION
         # ====================================================
 
         review_json[
             "question"
         ] = question
 
+        # ====================================================
+        # TRUSTED REVIEW TYPES
+        # ====================================================
 
         review_json[
             "review_types"
@@ -1614,7 +1754,6 @@ def review_project(
             )
         )
 
-
         # ====================================================
         # PYDANTIC VALIDATION
         # ====================================================
@@ -1622,14 +1761,11 @@ def review_project(
         try:
 
             validated_review = (
-
                 StructuredReview
                 .model_validate(
                     review_json
                 )
-
             )
-
 
         except ValidationError as e:
 
@@ -1637,16 +1773,13 @@ def review_project(
                 "\nREVIEW VALIDATION ERROR"
             )
 
-
             print(
                 e
             )
 
-
             print(
                 "\nRECEIVED JSON:"
             )
-
 
             print(
                 json.dumps(
@@ -1656,49 +1789,35 @@ def review_project(
                 )
             )
 
-
             raise HTTPException(
-
                 status_code=502,
-
                 detail=(
                     "The AI review did not "
                     "match the required "
                     "response structure."
                 )
-
             )
-
 
         # ====================================================
         # FINDING VALIDATION
         # ====================================================
 
         validated_review = (
-
             validate_findings(
                 validated_review
             )
-
         )
 
-
         # ====================================================
-        # NORMALIZATION
+        # NORMALIZE
         # ====================================================
 
         validated_review = (
-
             normalize_review(
-
                 review=validated_review,
-
                 question=question
-
             )
-
         )
-
 
         # ====================================================
         # REVIEW MODES
@@ -1708,155 +1827,141 @@ def review_project(
             validated_review.review_types
         )
 
-
         full_review = (
             "full_review"
             in modes
         )
 
-
         # ====================================================
-        # PERFORMANCE
+        # OPTIONAL SECTIONS
         # ====================================================
 
         if (
-
             "performance"
             not in modes
-
             and not full_review
-
         ):
 
             validated_review.performance = None
 
-
-        # ====================================================
-        # SECURITY
-        # ====================================================
-
         if (
-
             "security"
             not in modes
-
             and not full_review
-
         ):
 
             validated_review.security = None
 
-
-        # ====================================================
-        # CODE QUALITY
-        # ====================================================
-
         if (
-
             "code_quality"
             not in modes
-
             and not full_review
-
         ):
 
             validated_review.code_quality = None
 
-
-        # ====================================================
-        # EXPECTED OUTPUT
-        # ====================================================
-
         if (
-
             "output"
             not in modes
-
             and not full_review
-
         ):
 
             validated_review.expected_output = None
 
-
         # ====================================================
-        # SCORE PROTECTION
+        # SCORE
         # ====================================================
 
         score_keywords = [
-
             "score",
-
             "rating",
-
             "rate this",
-
             "code quality score",
-
             "project score"
-
         ]
 
-
         score_requested = any(
-
             keyword
             in question.lower()
-
-            for keyword
-            in score_keywords
-
+            for keyword in score_keywords
         )
-
 
         if not score_requested:
 
             validated_review.score = None
-
 
         # ====================================================
         # FINAL NORMALIZATION
         # ====================================================
 
         validated_review = (
-
             normalize_review(
-
                 review=validated_review,
-
                 question=question
-
             )
-
         )
 
+        # ====================================================
+        # FINAL FILE OVERRIDE
+        # ====================================================
+        #
+        # Even after normalization, force the authoritative
+        # current retrieval files one final time.
+        #
+        # ====================================================
+
+        validated_review.files_analyzed = (
+            trusted_files
+        )
+
+        # ====================================================
+        # FINAL DEBUG
+        # ====================================================
+
+        print(
+            "\n========== FINAL REVIEW FILES =========="
+        )
+
+        for file_info in (
+            validated_review.files_analyzed
+        ):
+
+            print(
+                file_info.file_name,
+                "|",
+                file_info.path
+            )
+
+        print(
+            "Final File Count:",
+            len(
+                validated_review.files_analyzed
+            )
+        )
+
+        print(
+            "========================================\n"
+        )
 
         # ====================================================
         # RESPONSE
         # ====================================================
 
         return {
-
             "success": True,
 
             "question": question,
 
             "review_types": (
-
                 validated_review
                 .review_types
-
             ),
 
             "review": (
-
                 validated_review
                 .model_dump()
-
             )
-
         }
-
 
     # ========================================================
     # HTTP EXCEPTIONS
@@ -1865,7 +1970,6 @@ def review_project(
     except HTTPException:
 
         raise
-
 
     # ========================================================
     # GROQ / GENERAL ERRORS
@@ -1880,174 +1984,119 @@ def review_project(
             repr(e)
         )
 
-
-        # ====================================================
-        # GROQ STRUCTURED OUTPUT ERROR
-        # ====================================================
+        # ----------------------------------------------------
+        # JSON VALIDATION
+        # ----------------------------------------------------
 
         if (
             "json_validate_failed"
             in error_text.lower()
-
             or
-
             "failed to validate json"
             in error_text.lower()
-
         ):
 
             raise HTTPException(
-
                 status_code=502,
-
                 detail=(
-
                     "The AI model could not "
                     "generate a response matching "
                     "the structured review schema."
-
                 )
-
             )
 
-
-        # ====================================================
+        # ----------------------------------------------------
         # RATE LIMIT
-        # ====================================================
+        # ----------------------------------------------------
 
         if (
-
             "429"
             in error_text
-
             or
-
             "rate_limit"
             in error_text.lower()
-
         ):
 
             raise HTTPException(
-
                 status_code=429,
-
                 detail=(
-
                     "AI model rate limit reached. "
                     "Please try again shortly."
-
                 )
-
             )
 
-
-        # ====================================================
+        # ----------------------------------------------------
         # AUTHENTICATION
-        # ====================================================
+        # ----------------------------------------------------
 
         if (
-
             "401"
             in error_text
-
             or
-
             "authentication"
             in error_text.lower()
-
             or
-
             "invalid api key"
             in error_text.lower()
-
         ):
 
             raise HTTPException(
-
                 status_code=502,
-
                 detail=(
-
                     "AI provider authentication failed. "
                     "Check GROQ_API_KEY in .env."
-
                 )
-
             )
 
-
-        # ====================================================
-        # MODEL NOT FOUND
-        # ====================================================
+        # ----------------------------------------------------
+        # MODEL
+        # ----------------------------------------------------
 
         if (
-
             "model_not_found"
             in error_text.lower()
-
             or
-
             "does not exist"
             in error_text.lower()
-
         ):
 
             raise HTTPException(
-
                 status_code=502,
-
                 detail=(
-
                     "The configured Groq model is "
                     "not available to this API key."
-
                 )
-
             )
 
-
-        # ====================================================
+        # ----------------------------------------------------
         # REQUEST TOO LARGE
-        # ====================================================
+        # ----------------------------------------------------
 
         if (
-
             "413"
             in error_text
-
             or
-
             "request too large"
             in error_text.lower()
-
         ):
 
             raise HTTPException(
-
                 status_code=413,
-
                 detail=(
-
                     "The retrieved code and prompt "
                     "are too large for the current "
                     "AI model limit."
-
                 )
-
             )
 
-
-        # ====================================================
+        # ----------------------------------------------------
         # GENERIC
-        # ====================================================
+        # ----------------------------------------------------
 
         raise HTTPException(
-
             status_code=500,
-
             detail=(
                 "Failed to generate "
                 "code review."
             )
-
         )

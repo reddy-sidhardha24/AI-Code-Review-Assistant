@@ -2,7 +2,7 @@ import os
 import sqlite3
 
 PASSWORD = "admin123"
-API_KEY = "sk-test-123456789"
+API_KEY = "sk-demo-123456789"
 
 
 def divide(a, b):
@@ -23,7 +23,11 @@ def find_duplicates(numbers):
 def get_user(username):
     connection = sqlite3.connect("users.db")
 
-    query = "SELECT * FROM users WHERE username = '" + username + "'"
+    query = (
+        "SELECT * FROM users WHERE username = '"
+        + username
+        + "'"
+    )
 
     cursor = connection.cursor()
     cursor.execute(query)

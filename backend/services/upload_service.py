@@ -510,111 +510,118 @@ class UploadService:
         code: str,
         filename: str
     ):
+        """
+        Store pasted source code as a new standalone project.
 
-        if not code.strip():
+        Every paste operation represents a NEW project.
+        Previous pasted files are removed before creating
+        and indexing the new source file.
+        """
 
-            raise ValueError(
-                "Code cannot be empty."
-            )
+        # ========================================================
+        # VALIDATE INPUT
+        # ========================================================
 
-        clean_filename = Path(
-            filename
-        ).name
-
-        if not clean_filename:
-
+        if not filename:
             raise ValueError(
                 "Filename cannot be empty."
             )
 
-        extension = (
-            Path(
-                clean_filename
-            ).suffix.lower()
-        )
-
-        if extension not in (
-            self.SUPPORTED_EXTENSIONS
-        ):
-
+        if not code or not code.strip():
             raise ValueError(
-                f"Unsupported source-code extension: "
-                f"{extension}"
+                "Code cannot be empty."
             )
 
-        project_name = (
-            "pasted_code"
-        )
+        # ========================================================
+        # PASTED CODE PROJECT DIRECTORY
+        # ========================================================
 
         project_folder = (
-            self.upload_dir
-            / project_name
+            self.upload_dir / "pasted_code"
         )
 
-        # ----------------------------------------------------
-        # Reset previous pasted project
-        # ----------------------------------------------------
+        # ========================================================
+        # REMOVE PREVIOUS PASTE PROJECT
+        # ========================================================
 
         if project_folder.exists():
+
+            print(
+                "\nRemoving previous pasted-code project..."
+            )
 
             shutil.rmtree(
                 project_folder
             )
+
+        # ========================================================
+        # CREATE FRESH PROJECT DIRECTORY
+        # ========================================================
 
         project_folder.mkdir(
             parents=True,
             exist_ok=True
         )
 
-        file_path = (
-            project_folder
-            / clean_filename
-        )
+        # ========================================================
+        # CREATE NEW SOURCE FILE
+        # ========================================================
 
-        # ----------------------------------------------------
-        # Save code
-        # ----------------------------------------------------
+        safe_filename = Path(
+            filename
+        ).name
+
+        file_path = (
+            project_folder / safe_filename
+        )
 
         with open(
             file_path,
             "w",
             encoding="utf-8"
-        ) as output_file:
+        ) as file:
 
-            output_file.write(
+            file.write(
                 code
             )
 
-        # ----------------------------------------------------
-        # Build RAG database
-        # ----------------------------------------------------
+        print(
+            "\nProcessing pasted code:",
+            safe_filename
+        )
 
-        metadata = (
+        print(
+            "Created:",
+            file_path
+        )
+
+        # ========================================================
+        # BUILD NEW RAG INDEX
+        # ========================================================
+
+        print(
+            "\nBuilding fresh RAG index for pasted code..."
+        )
+
+        result = (
             self.rag_pipeline
             .build_vector_database(
-                str(
-                    project_folder
-                )
+                str(project_folder)
             )
         )
 
+        # ========================================================
+        # RETURN RESULT
+        # ========================================================
+
         return {
             "success": True,
-
             "message": (
-                "Code uploaded and "
-                "indexed successfully."
+                "Pasted code processed successfully."
             ),
-
-            "project_name": project_name,
-
-            "project_folder": (
+            "filename": safe_filename,
+            "project_path": str(
                 project_folder
             ),
-
-            "file_name": (
-                clean_filename
-            ),
-
-            "metadata": metadata
+            "rag": result
         }
