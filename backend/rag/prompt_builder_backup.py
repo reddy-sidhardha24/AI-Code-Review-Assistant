@@ -1596,8 +1596,8 @@ Each performance issue:
   "title": "",
   "description": "",
   "file": "",
-  "line": 37,
-  "line_range": "37-37"
+  "line": null,
+  "line_range": null,
   "evidence": "",
   "impact": "",
   "suggestion": "",
@@ -1766,7 +1766,7 @@ Before returning JSON:
 Return ONLY JSON.
 """.strip()
 
-    # ============================================================
+        # ============================================================
     # FINAL PROMPT
     # ============================================================
 
@@ -1785,7 +1785,7 @@ Return ONLY JSON.
             )
 
         # --------------------------------------------------------
-        # DETECT REVIEW INTENT
+        # Detect review intent
         # --------------------------------------------------------
 
         modes = self.detect_review_modes(
@@ -1793,7 +1793,7 @@ Return ONLY JSON.
         )
 
         # --------------------------------------------------------
-        # BUILD CONTEXT
+        # Build only essential context
         # --------------------------------------------------------
 
         metadata_context = (
@@ -1813,23 +1813,16 @@ Return ONLY JSON.
         )
 
         # --------------------------------------------------------
-        # FINAL PROMPT
+        # Compact grounded review instructions
         # --------------------------------------------------------
 
         prompt = f"""
-You are a senior software engineer performing a grounded
-AI code review using Retrieval-Augmented Generation.
+You are a senior software engineer performing a
+grounded AI code review using Retrieval-Augmented
+Generation.
 
-Analyze ONLY the project metadata and retrieved source code
+Analyze ONLY the project metadata and source code
 provided below.
-
-Do not use previous conversations, memory, external code,
-or assumptions.
-
-Every finding MUST be supported by the supplied source code.
-
-Do not invent files, functions, classes, libraries,
-vulnerabilities, line numbers, statistics, or outputs.
 
 ============================================================
 PROJECT
@@ -1844,7 +1837,7 @@ SOURCE CODE
 {code_context}
 
 ============================================================
-USER REQUEST
+USER REVIEW REQUEST
 ============================================================
 
 {query}
@@ -1856,93 +1849,59 @@ REVIEW TYPES
 {requested_modes}
 
 ============================================================
-ANALYSIS RULES
+GROUNDING RULES
 ============================================================
 
+1. Use only the supplied metadata and source code.
+
+2. Every finding must be supported by actual source
+   code evidence.
+
+3. Never invent files, functions, classes, libraries,
+   vulnerabilities, line numbers, or statistics.
+
+4. Inspect ALL supplied source code before responding.
+
+5. Use exact file names and source line numbers.
+
+6. Do not create duplicate findings.
+
+7. Do not classify security or performance issues
+   as bugs unless they independently cause incorrect
+   behavior.
+
 ============================================================
-BUGS VS ERRORS
+BUGS AND ERRORS
 ============================================================
 
-BUGS and ERRORS are separate fields.
+Report only confirmed or strongly supported bugs.
 
-BUGS:
-Report the underlying defect.
+The bug type MUST be exactly one of:
 
-Bug type MUST be exactly one of:
+confirmed
+conditional
+possible_risk
 
-"confirmed"
-"conditional"
-"possible_risk"
+Never use runtime error, security issue, security,
+performance, bug, or any other value as the bug type.
 
-Never use any other bug type.
+Use confirmed when the supplied source directly proves
+the defect.
 
-============================================================
-BUG CLASSIFICATION
-============================================================
+Use conditional when the defect occurs only under a
+specific input or runtime condition.
 
-A security vulnerability is NOT a bug.
+Use possible_risk when the source suggests a risk but
+cannot fully confirm the defect.
 
-A performance problem is NOT a bug.
+Security vulnerabilities belong in SECURITY.
 
-Do NOT place security findings in the bugs array.
+Performance problems belong in PERFORMANCE.
 
-Do NOT place performance findings in the bugs array.
+Do not duplicate findings across categories.
 
-The bugs array must contain only defects involving:
+For every bug provide:
 
-- incorrect behavior
-- runtime failures
-- invalid calculations
-- incorrect logic
-- invalid conditions
-- invalid indexing
-- directly demonstrated program failures
-
-SQL injection belongs in security.
-
-Command injection belongs in security.
-
-Hardcoded credentials belong in security.
-
-API key exposure belongs in security.
-
-Performance complexity belongs in performance.
-
-Only classify a security or performance issue as a bug if
-the supplied source independently demonstrates incorrect
-program behavior caused by that issue.
-
-
-ERRORS:
-Report runtime exceptions or directly observable errors.
-
-The "errors" field MUST contain objects with exactly these
-properties:
-
-type
-title
-file
-line
-line_range
-evidence
-description
-impact
-fix
-confidence
-
-For runtime exceptions, use:
-
-"type": "runtime"
-
-If the source directly demonstrates a runtime exception,
-report the underlying defect in "bugs" AND the resulting
-runtime exception in "errors" when appropriate.
-
-Example structure for bugs:
-
-bugs is an array.
-
-Each bug object contains:
 title
 type
 severity
@@ -1955,11 +1914,26 @@ impact
 fix
 confidence
 
-Example structure for errors:
+If no supported bugs exist, return an empty bugs array.
 
-errors is an array.
+============================================================
+ERRORS
+============================================================
 
-Each error object contains:
+Report confirmed runtime or execution-related errors.
+
+Examples include:
+
+ZeroDivisionError
+FileNotFoundError
+TypeError
+IndexError
+KeyError
+unhandled exceptions
+resource errors
+
+For every error provide:
+
 type
 title
 file
@@ -1971,292 +1945,489 @@ impact
 fix
 confidence
 
-For a division-by-zero example:
+Use the actual source code to determine the error type.
 
-Bug title:
-Division by zero
+Do not invent runtime errors.
 
-Bug type:
-confirmed
+If no supported errors exist, return an empty errors array.
 
-Error type:
-runtime
-
-Error title:
-ZeroDivisionError
-
-Do not leave "errors" empty when the supplied source directly
-demonstrates a runtime exception.
-
-Do not put security-only or performance-only findings into
-"errors".
+============================================================
 
 ============================================================
 SECURITY
 ============================================================
 
-Report only security issues directly supported by the source.
+Check the entire source for:
 
-The "security" object MUST contain BOTH:
-
-issues
-issues_found
-
-"issues" MUST be an array of security finding objects.
-
-"issues_found" MUST be an integer equal to the number of
-objects in "issues".
-
-If there are no security issues:
-
-"issues" must be an empty array.
-
-"issues_found" must be 0.
-
-Each security issue must contain the fields required by the
-security schema.
-
-Check for:
-
-- hardcoded credentials
+- hardcoded passwords
 - API keys
+- secrets
 - SQL injection
 - command injection
 - unsafe input handling
-- insecure file operations
-- authentication problems
-- authorization problems
+- unsafe system commands
+- insecure authentication/authorization
 - sensitive information exposure
 
-Only report issues supported by the supplied source code.
+Explicitly inspect APIs such as:
 
-Do not classify performance issues as security issues.
-Do not classify ordinary code-quality issues as security
-issues.
+os.system
+os.popen
+subprocess
 
+Only report security findings supported by code.
 
-PERFORMANCE:
-Determine complexity from actual control flow.
+============================================================
+PERFORMANCE
+============================================================
 
-Check:
+Inspect:
+
 - nested loops
+- time complexity
+- space complexity
 - repeated searches
 - unnecessary calculations
 - inefficient algorithms
 - scalability problems
 
+Determine complexity from actual control flow.
+
+For every nested loop, verify whether the inner
+operation scales with the input size.
+
 ============================================================
 CODE QUALITY
 ============================================================
 
-Code quality findings are separate from bugs, security issues,
-and performance issues.
+Report only observable issues involving:
 
-The "code_quality" object MUST contain exactly these two fields:
+- readability
+- naming
+- maintainability
+- duplication
+- unnecessary complexity
+- resource management
+- organization
 
-observations
-suggestions
-
-"observations" MUST be an array.
-
-"suggestions" MUST be an array.
-
-Do NOT add any other fields to the "code_quality" object.
-
-Never output:
-
-anyOf
-oneOf
-allOf
-properties
-required
-additionalProperties
-schema
-type
-
-These are schema definitions and MUST NOT appear in the
-generated JSON response.
-
-Each observation object MUST contain exactly:
-
-title
-description
-file
-line
-line_range
-evidence
-impact
-suggestion
-confidence
-
-Each suggestion object MUST contain exactly:
-
-title
-description
-file
-line
-line_range
-evidence
-impact
-suggestion
-confidence
-
-If there are no code quality findings:
-
-observations must be an empty array.
-
-suggestions must be an empty array.
-
-Do not invent code quality findings.
-
-Only report observable issues directly supported by the
-supplied source code.
-
-Do not report security vulnerabilities as code quality
-findings.
-
-Do not report performance issues as code quality findings.
-
-Do not report bugs or runtime errors as code quality findings.
-
-Do not generate generic recommendations.
-
-Do not generate schema definitions.
-
-Do not generate nested arrays.
-
-All finding arrays must contain finding objects.
-
+Do not report generic filler.
 
 ============================================================
 STRUCTURE
 ============================================================
 
-key_methods MUST be a flat array of strings.
+Identify ALL functions and classes explicitly visible
+in the supplied source.
 
-Example values:
+key_methods must contain every relevant function name.
 
-"divide"
-"find_duplicates"
-"get_user"
-"execute_command"
-"calculate_average"
-"main"
+key_classes must contain only explicitly defined classes.
 
-Never use nested arrays.
+libraries must come only from visible imports or metadata.
 
-key_classes MUST be a flat array of strings.
+============================================================
+FILES ANALYZED
+============================================================
 
-If there are no classes, return an empty array.
+files_analyzed must contain objects with:
 
-libraries MUST be a flat array of strings.
+file_name
+path
+language
 
-Example values:
+Use only files actually supplied in the source context.
 
-"os"
-"sqlite3"
 
-Never use nested arrays.
+============================================================
+MANDATORY TOP-LEVEL CHECK
+============================================================
 
-Identify every function explicitly defined in the supplied
-source.
+Before returning JSON, verify that the response contains
+ALL of these top-level properties:
+
+project
+question
+user_requirements
+review_types
+answer_summary
+files_analyzed
+bugs
+errors
+performance
+security
+code_quality
+key_methods
+key_classes
+libraries
+corrected_code
+expected_output
+score
+confidence
+final_verdict
+
+The response is invalid if even ONE property is missing.
+
+In particular, NEVER forget:
+
+files_analyzed
+key_methods
+key_classes
+libraries
+
+    # --------------------------------------------------------
+    # OUTPUT REQUIREMENTS
+    # --------------------------------------------------------
+
+    prompt = f"""
+You are a senior software engineer performing a
+grounded AI code review using Retrieval-Augmented
+Generation.
+
+Analyze ONLY the project metadata and source code
+provided below.
+
+============================================================
+PROJECT
+============================================================
+
+{metadata_context}
+
+============================================================
+SOURCE CODE
+============================================================
+
+{code_context}
+
+============================================================
+USER REVIEW REQUEST
+============================================================
+
+{query}
+
+============================================================
+REVIEW TYPES
+============================================================
+
+{requested_modes}
+
+============================================================
+GROUNDING RULES
+============================================================
+
+1. Analyze only the supplied project metadata and source code.
+
+2. Every finding must be directly supported by the supplied
+   source code.
+
+3. Never invent files, functions, classes, libraries,
+   vulnerabilities, line numbers, statistics, or behavior.
+
+4. Inspect all supplied source code.
+
+5. Use exact file names and source line numbers.
+
+6. Do not create duplicate findings.
+
+7. Security issues must remain security findings.
+
+8. Performance issues must remain performance findings.
+
+============================================================
+BUGS
+============================================================
+
+Report only confirmed or strongly supported bugs.
+
+The bug type MUST be exactly one of:
+
+confirmed
+conditional
+possible_risk
+
+Never use any other value for the bug type.
+
+Security vulnerabilities must not be classified as bugs
+unless they independently cause incorrect program behavior.
+
+Performance problems must not be classified as bugs.
+
+For every bug provide:
+
+title
+type
+severity
+file
+line
+line_range
+evidence
+description
+impact
+fix
+confidence
+
+============================================================
+ERRORS
+============================================================
+
+Report actual runtime or execution errors supported by
+the supplied source code.
+
+Do not duplicate a bug unnecessarily.
+
+For every error provide:
+
+type
+title
+file
+line
+line_range
+evidence
+description
+impact
+fix
+confidence
+
+============================================================
+SECURITY
+============================================================
+
+Inspect the complete supplied source code for:
+
+- hardcoded passwords
+- hardcoded API keys
+- secrets
+- SQL injection
+- command injection
+- unsafe input handling
+- unsafe system commands
+- insecure authentication
+- insecure authorization
+- sensitive information exposure
+
+Only report security issues supported by actual source code.
+
+For every security finding provide:
+
+title
+description
+file
+line
+line_range
+evidence
+impact
+suggestion
+severity
+confidence
+
+============================================================
+PERFORMANCE
+============================================================
+
+Inspect:
+
+- nested loops
+- time complexity
+- space complexity
+- repeated searches
+- unnecessary calculations
+- inefficient algorithms
+- scalability problems
+
+Determine complexity from the actual control flow.
+
+For every performance finding provide:
+
+title
+description
+file
+line
+line_range
+evidence
+impact
+suggestion
+confidence
+
+============================================================
+CODE QUALITY
+============================================================
+
+Report only observable code-quality problems.
+
+Consider:
+
+- readability
+- naming
+- maintainability
+- duplication
+- unnecessary complexity
+- resource management
+- error handling
+- organization
+
+Do not generate generic filler.
+
+============================================================
+PROJECT STRUCTURE
+============================================================
+
+Identify every function explicitly visible in the supplied
+source code.
+
+key_methods must contain all relevant function names.
 
 Identify every explicitly defined class.
 
-Identify libraries only from visible import statements.
+key_classes must contain only classes actually present
+in the supplied source code.
+
+libraries must contain only libraries visible in imports
+or supplied project metadata.
 
 ============================================================
-FINDING CLASSIFICATION AND DUPLICATION
+FILES ANALYZED
 ============================================================
 
-Each underlying issue must appear in the most appropriate
-category.
+files_analyzed must contain only files actually supplied
+in the source context.
 
-Do not duplicate a security issue in bugs.
+Each file must contain:
 
-Do not duplicate a performance issue in bugs.
+file_name
+path
+language
 
-A confirmed runtime exception may appear in both:
-
-bugs
-errors
-
-because bugs represents the defect and errors represents
-the resulting runtime exception.
-
-Do not duplicate the same finding more than once inside
-the same category.
+Do not invent additional files.
 
 ============================================================
-OUTPUT RULES
+USER REQUIREMENTS
 ============================================================
 
-Return ONLY valid JSON.
+user_requirements MUST always be returned.
 
-Every top-level schema property is mandatory.
+It MUST be an array of strings.
 
-Never omit properties.
+Extract requirements only from the user's review question.
 
-Use [] for empty arrays.
+Do not invent additional requirements.
 
-Use null for nullable fields.
+If no explicit requirements can be identified,
+return an empty array.
 
-user_requirements MUST always be an array of strings.
+============================================================
+CORRECTED CODE
+============================================================
 
-corrected_code MUST always be an array.
+corrected_code MUST always be returned.
 
-If no correction is required, return an empty array.
+It MUST be an array.
+
+Provide corrected code only for confirmed or strongly
+supported findings where a safe correction can be generated.
 
 Do not rewrite unrelated code.
 
-Before returning JSON:
+Do not invent missing source code.
 
-1. Verify every finding against source code.
-2. Verify file names.
-3. Verify line numbers.
-4. Verify finding categories.
-5. Remove duplicate findings.
-6. Verify key_methods.
-7. Verify libraries.
-8. Verify complexity.
-9. Verify confidence.
-10. Verify JSON syntax.
+If no safe correction is necessary, return an empty array.
 
 ============================================================
-STRICT JSON STRUCTURE
+OTHER REQUIRED OUTPUT
 ============================================================
 
-The response must contain data only.
+expected_output MUST always be returned.
 
-Never output JSON Schema definitions.
+Use null when an expected output cannot be determined.
 
-Never output:
+score MUST always be returned.
 
-anyOf
-oneOf
-allOf
-properties
-required
-additionalProperties
-schema
-type definitions
+Provide a code health score from 0 to 100 when meaningful.
+Otherwise use null.
 
-These terms must not appear as structural schema metadata
-in the response.
+confidence MUST always be returned.
 
-Follow the application schema exactly.
+Provide the overall confidence from 0 to 100 when meaningful.
+Otherwise use null.
 
-Do not invent fields.
+final_verdict MUST always be returned.
 
-Do not omit required fields.
+Provide a short overall assessment of the supplied source code.
 
-Do not change arrays into objects.
+============================================================
+MANDATORY JSON PROPERTIES
+============================================================
 
-Do not change strings into arrays.
+The final JSON MUST contain ALL of these top-level
+properties:
 
-Do not change arrays of strings into nested arrays.
+project
+question
+user_requirements
+review_types
+answer_summary
+files_analyzed
+key_methods
+key_classes
+libraries
+bugs
+errors
+performance
+security
+code_quality
+corrected_code
+expected_output
+score
+confidence
+final_verdict
+
+NEVER omit any property.
+
+If a list has no values, return an empty array.
+
+If a nullable property has no applicable value, return null.
+
+Performance must always contain its required object.
+
+Security must always contain its required object.
+
+Code quality must always contain its required object.
+
+============================================================
+FINAL VALIDATION
+============================================================
+
+Before returning the response:
+
+1. Validate every finding against the supplied source code.
+
+2. Verify the finding category.
+
+3. Remove duplicate findings.
+
+4. Verify file names.
+
+5. Verify line numbers.
+
+6. Verify files_analyzed.
+
+7. Verify security issues_found.
+
+8. Verify key_methods completeness.
+
+9. Verify key_classes.
+
+10. Verify libraries.
+
+11. Verify time complexity.
+
+12. Verify space complexity.
+
+13. Verify confidence values.
+
+14. Verify every mandatory property exists.
+
+15. Verify the response is valid JSON.
 
 Return ONLY the JSON object.
 """.strip()
 
-        return prompt
+    return prompt

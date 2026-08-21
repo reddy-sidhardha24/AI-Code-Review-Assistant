@@ -1596,8 +1596,8 @@ Each performance issue:
   "title": "",
   "description": "",
   "file": "",
-  "line": 37,
-  "line_range": "37-37"
+  "line": null,
+  "line_range": null,
   "evidence": "",
   "impact": "",
   "suggestion": "",
@@ -1766,10 +1766,8 @@ Before returning JSON:
 Return ONLY JSON.
 """.strip()
 
-    # ============================================================
-    # FINAL PROMPT
-    # ============================================================
-
+     # ============================================================
+# FINAL PROMPT
     def build_prompt(
         self,
         query: str,
@@ -1813,450 +1811,92 @@ Return ONLY JSON.
         )
 
         # --------------------------------------------------------
+        # BUILD TASK RULES
+        # --------------------------------------------------------
+
+        task_rules = self.build_task_rules(
+            modes
+        )
+
+        # --------------------------------------------------------
+        # BUILD JSON OUTPUT RULES
+        # --------------------------------------------------------
+
+        output_rules = (
+            self.build_output_rules_json(
+                modes
+            )
+        )
+
+        # --------------------------------------------------------
         # FINAL PROMPT
         # --------------------------------------------------------
 
-        prompt = f"""
-You are a senior software engineer performing a grounded
-AI code review using Retrieval-Augmented Generation.
+        prompt = (
+            "You are a senior software engineer "
+            "performing a grounded AI code review "
+            "using Retrieval-Augmented Generation.\n\n"
 
-Analyze ONLY the project metadata and retrieved source code
-provided below.
+            "Analyze ONLY the project metadata and "
+            "retrieved source code provided below.\n\n"
 
-Do not use previous conversations, memory, external code,
-or assumptions.
+            "============================================================\n"
+            "PROJECT METADATA\n"
+            "============================================================\n\n"
 
-Every finding MUST be supported by the supplied source code.
+            + metadata_context
 
-Do not invent files, functions, classes, libraries,
-vulnerabilities, line numbers, statistics, or outputs.
+            + "\n\n"
+            "============================================================\n"
+            "RETRIEVED SOURCE CODE\n"
+            "============================================================\n\n"
 
-============================================================
-PROJECT
-============================================================
+            + code_context
 
-{metadata_context}
+            + "\n\n"
+            "============================================================\n"
+            "USER REVIEW REQUEST\n"
+            "============================================================\n\n"
 
-============================================================
-SOURCE CODE
-============================================================
+            + query
 
-{code_context}
+            + "\n\n"
+            "============================================================\n"
+            "REVIEW TYPES\n"
+            "============================================================\n\n"
 
-============================================================
-USER REQUEST
-============================================================
+            + requested_modes
 
-{query}
+            + "\n\n"
+            "============================================================\n"
+            "COMMON GROUNDING RULES\n"
+            "============================================================\n\n"
 
-============================================================
-REVIEW TYPES
-============================================================
+            + self.build_common_rules()
 
-{requested_modes}
+            + "\n\n"
+            "============================================================\n"
+            "CATEGORY RULES\n"
+            "============================================================\n\n"
 
-============================================================
-ANALYSIS RULES
-============================================================
+            + self.build_category_boundaries()
 
-============================================================
-BUGS VS ERRORS
-============================================================
+            + "\n\n"
+            "============================================================\n"
+            "TASK RULES\n"
+            "============================================================\n\n"
 
-BUGS and ERRORS are separate fields.
+            + task_rules
 
-BUGS:
-Report the underlying defect.
+            + "\n\n"
+            "============================================================\n"
+            "OUTPUT CONTRACT\n"
+            "============================================================\n\n"
 
-Bug type MUST be exactly one of:
+            + output_rules
 
-"confirmed"
-"conditional"
-"possible_risk"
-
-Never use any other bug type.
-
-============================================================
-BUG CLASSIFICATION
-============================================================
-
-A security vulnerability is NOT a bug.
-
-A performance problem is NOT a bug.
-
-Do NOT place security findings in the bugs array.
-
-Do NOT place performance findings in the bugs array.
-
-The bugs array must contain only defects involving:
-
-- incorrect behavior
-- runtime failures
-- invalid calculations
-- incorrect logic
-- invalid conditions
-- invalid indexing
-- directly demonstrated program failures
-
-SQL injection belongs in security.
-
-Command injection belongs in security.
-
-Hardcoded credentials belong in security.
-
-API key exposure belongs in security.
-
-Performance complexity belongs in performance.
-
-Only classify a security or performance issue as a bug if
-the supplied source independently demonstrates incorrect
-program behavior caused by that issue.
-
-
-ERRORS:
-Report runtime exceptions or directly observable errors.
-
-The "errors" field MUST contain objects with exactly these
-properties:
-
-type
-title
-file
-line
-line_range
-evidence
-description
-impact
-fix
-confidence
-
-For runtime exceptions, use:
-
-"type": "runtime"
-
-If the source directly demonstrates a runtime exception,
-report the underlying defect in "bugs" AND the resulting
-runtime exception in "errors" when appropriate.
-
-Example structure for bugs:
-
-bugs is an array.
-
-Each bug object contains:
-title
-type
-severity
-file
-line
-line_range
-evidence
-description
-impact
-fix
-confidence
-
-Example structure for errors:
-
-errors is an array.
-
-Each error object contains:
-type
-title
-file
-line
-line_range
-evidence
-description
-impact
-fix
-confidence
-
-For a division-by-zero example:
-
-Bug title:
-Division by zero
-
-Bug type:
-confirmed
-
-Error type:
-runtime
-
-Error title:
-ZeroDivisionError
-
-Do not leave "errors" empty when the supplied source directly
-demonstrates a runtime exception.
-
-Do not put security-only or performance-only findings into
-"errors".
-
-============================================================
-SECURITY
-============================================================
-
-Report only security issues directly supported by the source.
-
-The "security" object MUST contain BOTH:
-
-issues
-issues_found
-
-"issues" MUST be an array of security finding objects.
-
-"issues_found" MUST be an integer equal to the number of
-objects in "issues".
-
-If there are no security issues:
-
-"issues" must be an empty array.
-
-"issues_found" must be 0.
-
-Each security issue must contain the fields required by the
-security schema.
-
-Check for:
-
-- hardcoded credentials
-- API keys
-- SQL injection
-- command injection
-- unsafe input handling
-- insecure file operations
-- authentication problems
-- authorization problems
-- sensitive information exposure
-
-Only report issues supported by the supplied source code.
-
-Do not classify performance issues as security issues.
-Do not classify ordinary code-quality issues as security
-issues.
-
-
-PERFORMANCE:
-Determine complexity from actual control flow.
-
-Check:
-- nested loops
-- repeated searches
-- unnecessary calculations
-- inefficient algorithms
-- scalability problems
-
-============================================================
-CODE QUALITY
-============================================================
-
-Code quality findings are separate from bugs, security issues,
-and performance issues.
-
-The "code_quality" object MUST contain exactly these two fields:
-
-observations
-suggestions
-
-"observations" MUST be an array.
-
-"suggestions" MUST be an array.
-
-Do NOT add any other fields to the "code_quality" object.
-
-Never output:
-
-anyOf
-oneOf
-allOf
-properties
-required
-additionalProperties
-schema
-type
-
-These are schema definitions and MUST NOT appear in the
-generated JSON response.
-
-Each observation object MUST contain exactly:
-
-title
-description
-file
-line
-line_range
-evidence
-impact
-suggestion
-confidence
-
-Each suggestion object MUST contain exactly:
-
-title
-description
-file
-line
-line_range
-evidence
-impact
-suggestion
-confidence
-
-If there are no code quality findings:
-
-observations must be an empty array.
-
-suggestions must be an empty array.
-
-Do not invent code quality findings.
-
-Only report observable issues directly supported by the
-supplied source code.
-
-Do not report security vulnerabilities as code quality
-findings.
-
-Do not report performance issues as code quality findings.
-
-Do not report bugs or runtime errors as code quality findings.
-
-Do not generate generic recommendations.
-
-Do not generate schema definitions.
-
-Do not generate nested arrays.
-
-All finding arrays must contain finding objects.
-
-
-============================================================
-STRUCTURE
-============================================================
-
-key_methods MUST be a flat array of strings.
-
-Example values:
-
-"divide"
-"find_duplicates"
-"get_user"
-"execute_command"
-"calculate_average"
-"main"
-
-Never use nested arrays.
-
-key_classes MUST be a flat array of strings.
-
-If there are no classes, return an empty array.
-
-libraries MUST be a flat array of strings.
-
-Example values:
-
-"os"
-"sqlite3"
-
-Never use nested arrays.
-
-Identify every function explicitly defined in the supplied
-source.
-
-Identify every explicitly defined class.
-
-Identify libraries only from visible import statements.
-
-============================================================
-FINDING CLASSIFICATION AND DUPLICATION
-============================================================
-
-Each underlying issue must appear in the most appropriate
-category.
-
-Do not duplicate a security issue in bugs.
-
-Do not duplicate a performance issue in bugs.
-
-A confirmed runtime exception may appear in both:
-
-bugs
-errors
-
-because bugs represents the defect and errors represents
-the resulting runtime exception.
-
-Do not duplicate the same finding more than once inside
-the same category.
-
-============================================================
-OUTPUT RULES
-============================================================
-
-Return ONLY valid JSON.
-
-Every top-level schema property is mandatory.
-
-Never omit properties.
-
-Use [] for empty arrays.
-
-Use null for nullable fields.
-
-user_requirements MUST always be an array of strings.
-
-corrected_code MUST always be an array.
-
-If no correction is required, return an empty array.
-
-Do not rewrite unrelated code.
-
-Before returning JSON:
-
-1. Verify every finding against source code.
-2. Verify file names.
-3. Verify line numbers.
-4. Verify finding categories.
-5. Remove duplicate findings.
-6. Verify key_methods.
-7. Verify libraries.
-8. Verify complexity.
-9. Verify confidence.
-10. Verify JSON syntax.
-
-============================================================
-STRICT JSON STRUCTURE
-============================================================
-
-The response must contain data only.
-
-Never output JSON Schema definitions.
-
-Never output:
-
-anyOf
-oneOf
-allOf
-properties
-required
-additionalProperties
-schema
-type definitions
-
-These terms must not appear as structural schema metadata
-in the response.
-
-Follow the application schema exactly.
-
-Do not invent fields.
-
-Do not omit required fields.
-
-Do not change arrays into objects.
-
-Do not change strings into arrays.
-
-Do not change arrays of strings into nested arrays.
-
-Return ONLY the JSON object.
-""".strip()
+            + "\n\n"
+            "Return ONLY the JSON object."
+        )
 
         return prompt

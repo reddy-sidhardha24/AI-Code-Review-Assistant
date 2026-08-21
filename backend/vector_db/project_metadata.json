@@ -1,20 +1,20 @@
 {
     "project_name": "pasted_code",
     "total_files": 1,
-    "total_lines": 83,
+    "total_lines": 104,
     "languages": {
         "Python": {
             "files": 1,
-            "lines": 83
+            "lines": 104
         }
     },
     "files": [
         {
-            "name": "test_security.py",
-            "path": "test_security.py",
+            "name": "advanced_test.py",
+            "path": "advanced_test.py",
             "extension": ".py",
             "language": "Python",
-            "lines": 83
+            "lines": 104
         }
     ]
 }
