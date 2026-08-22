@@ -418,70 +418,268 @@ Files:
         if not retrieved_chunks:
             return "No relevant source-code chunks retrieved."
 
-        context_parts = []
+        # ========================================================
+        # REMOVE INVALID CHUNKS
+        # ========================================================
 
-        for index, chunk in enumerate(
-            retrieved_chunks,
-            start=1
-        ):
+        valid_chunks = []
+
+        for chunk in retrieved_chunks:
 
             if not isinstance(chunk, dict):
                 continue
+
+            content = (
+                chunk.get("numbered_content")
+                or chunk.get("content")
+                or ""
+            )
+
+            if not content.strip():
+                continue
+
+            valid_chunks.append(chunk)
+
+        if not valid_chunks:
+            return "No valid source-code chunks retrieved."
+
+        # ========================================================
+        # GROUP CHUNKS BY FILE
+        # ========================================================
+
+        grouped_files = {}
+
+        for chunk in valid_chunks:
 
             path = chunk.get(
                 "path",
                 "Unknown"
             )
 
-            relative_path = chunk.get(
-                "relative_path",
-                path
+            grouped_files.setdefault(
+                path,
+                []
+            ).append(chunk)
+
+        context_parts = []
+
+        chunk_counter = 1
+
+        # ========================================================
+        # BUILD CONTEXT
+        # ========================================================
+
+        for path, file_chunks in grouped_files.items():
+
+            # ----------------------------------------------------
+            # SORT CHUNKS BY SOURCE LINE
+            # ----------------------------------------------------
+
+            file_chunks.sort(
+                key=lambda chunk: (
+                    chunk.get(
+                        "start_line",
+                        0
+                    )
+                    if isinstance(
+                        chunk.get(
+                            "start_line",
+                            0
+                        ),
+                        int
+                    )
+                    else 0
+                )
             )
 
-            name = chunk.get(
-                "name",
-                "Unknown"
-            )
+            merged_segments = []
 
-            extension = chunk.get(
-                "extension",
-                ""
-            )
+            # ----------------------------------------------------
+            # MERGE OVERLAPPING CHUNKS
+            # ----------------------------------------------------
 
-            language = chunk.get(
-                "language",
-                "Unknown"
-            )
+            for chunk in file_chunks:
 
-            start_line = chunk.get(
-                "start_line",
-                "Unknown"
-            )
+                start_line = chunk.get(
+                    "start_line"
+                )
 
-            end_line = chunk.get(
-                "end_line",
-                "Unknown"
-            )
+                end_line = chunk.get(
+                    "end_line"
+                )
 
-            numbered_content = chunk.get(
-                "numbered_content",
-                ""
-            )
+                numbered_content = chunk.get(
+                    "numbered_content",
+                    ""
+                )
 
-            plain_content = chunk.get(
-                "content",
-                ""
-            )
+                plain_content = chunk.get(
+                    "content",
+                    ""
+                )
 
-            content = (
-                numbered_content
-                if numbered_content
-                else plain_content
-            )
+                content = (
+                    numbered_content
+                    if numbered_content
+                    else plain_content
+                )
 
-            context_parts.append(
-                f"""
---- RETRIEVED CHUNK {index} ---
+                if not content.strip():
+                    continue
+
+                # ------------------------------------------------
+                # FIRST CHUNK
+                # ------------------------------------------------
+
+                if not merged_segments:
+
+                    merged_segments.append(
+                        {
+                            "chunk": chunk,
+                            "start_line": start_line,
+                            "end_line": end_line,
+                            "content": content
+                        }
+                    )
+
+                    continue
+
+                previous = merged_segments[-1]
+
+                previous_end = previous.get(
+                    "end_line"
+                )
+
+                # ------------------------------------------------
+                # CHECK OVERLAP
+                # ------------------------------------------------
+
+                if (
+                    isinstance(
+                        start_line,
+                        int
+                    )
+                    and isinstance(
+                        previous_end,
+                        int
+                    )
+                    and start_line <= previous_end
+                ):
+
+                    # ------------------------------------------------
+                    # OVERLAPPING CHUNK
+                    # ------------------------------------------------
+
+                    previous_lines = (
+                        previous["content"]
+                        .splitlines()
+                    )
+
+                    current_lines = (
+                        content.splitlines()
+                    )
+
+                    overlap_count = (
+                        previous_end
+                        - start_line
+                        + 1
+                    )
+
+                    if overlap_count > 0:
+
+                        # Remove duplicated lines from
+                        # the beginning of current chunk.
+                        current_lines = (
+                            current_lines[
+                                overlap_count:
+                            ]
+                        )
+
+                    remaining_content = (
+                        "\n".join(
+                            current_lines
+                        ).strip()
+                    )
+
+                    if remaining_content:
+
+                        previous["content"] = (
+                            previous["content"]
+                            + "\n"
+                            + remaining_content
+                        )
+
+                    previous["end_line"] = max(
+                        previous_end,
+                        end_line
+                        if isinstance(
+                            end_line,
+                            int
+                        )
+                        else previous_end
+                    )
+
+                else:
+
+                    # ------------------------------------------------
+                    # NON-OVERLAPPING CHUNK
+                    # ------------------------------------------------
+
+                    merged_segments.append(
+                        {
+                            "chunk": chunk,
+                            "start_line": start_line,
+                            "end_line": end_line,
+                            "content": content
+                        }
+                    )
+
+            # ====================================================
+            # FORMAT MERGED FILE CONTEXT
+            # ====================================================
+
+            for segment in merged_segments:
+
+                chunk = segment["chunk"]
+
+                name = chunk.get(
+                    "name",
+                    "Unknown"
+                )
+
+                relative_path = chunk.get(
+                    "relative_path",
+                    path
+                )
+
+                extension = chunk.get(
+                    "extension",
+                    ""
+                )
+
+                language = chunk.get(
+                    "language",
+                    "Unknown"
+                )
+
+                start_line = segment.get(
+                    "start_line",
+                    "Unknown"
+                )
+
+                end_line = segment.get(
+                    "end_line",
+                    "Unknown"
+                )
+
+                content = segment.get(
+                    "content",
+                    ""
+                )
+
+                context_parts.append(
+                    f"""
+--- RETRIEVED CHUNK {chunk_counter} ---
 
 File: {name}
 Path: {path}
@@ -493,7 +691,13 @@ Lines: {start_line}-{end_line}
 SOURCE CODE:
 {content}
 """.strip()
-            )
+                )
+
+                chunk_counter += 1
+
+        # ========================================================
+        # FINAL RESULT
+        # ========================================================
 
         if not context_parts:
             return "No valid source-code chunks retrieved."
@@ -1859,162 +2063,115 @@ REVIEW TYPES
 ANALYSIS RULES
 ============================================================
 
+
 ============================================================
 BUGS VS ERRORS
 ============================================================
 
 BUGS and ERRORS are separate fields.
 
-BUGS:
-Report the underlying defect.
+BUGS represent the underlying defect.
 
-Bug type MUST be exactly one of:
+ERRORS represent the resulting runtime exception.
 
-"confirmed"
-"conditional"
-"possible_risk"
+If a directly demonstrated runtime exception exists,
+the underlying defect may appear in bugs and the resulting
+exception may appear in errors.
 
-Never use any other bug type.
+Do not invent runtime exceptions.
 
-============================================================
-BUG CLASSIFICATION
-============================================================
+Only report runtime errors directly demonstrated or strongly
+supported by the supplied source code.
 
-A security vulnerability is NOT a bug.
-
-A performance problem is NOT a bug.
-
-Do NOT place security findings in the bugs array.
-
-Do NOT place performance findings in the bugs array.
-
-The bugs array must contain only defects involving:
-
-- incorrect behavior
-- runtime failures
-- invalid calculations
-- incorrect logic
-- invalid conditions
-- invalid indexing
-- directly demonstrated program failures
-
-SQL injection belongs in security.
-
-Command injection belongs in security.
-
-Hardcoded credentials belong in security.
-
-API key exposure belongs in security.
-
-Performance complexity belongs in performance.
-
-Only classify a security or performance issue as a bug if
-the supplied source independently demonstrates incorrect
-program behavior caused by that issue.
+Do not classify security issues as bugs.
 
 
-ERRORS:
-Report runtime exceptions or directly observable errors.
+Do NOT classify security vulnerabilities as bugs.
 
-The "errors" field MUST contain objects with exactly these
-properties:
+Do NOT classify performance problems as bugs.
 
-type
-title
-file
-line
-line_range
-evidence
-description
-impact
-fix
-confidence
+Do NOT classify ordinary resource-management or
+maintainability problems as bugs.
 
-For runtime exceptions, use:
+A bug must represent a functional or runtime/logic defect.
 
-"type": "runtime"
+Examples:
 
-If the source directly demonstrates a runtime exception,
-report the underlying defect in "bugs" AND the resulting
-runtime exception in "errors" when appropriate.
+Division by zero = bug.
 
-Example structure for bugs:
+Incorrect calculation = bug.
 
-bugs is an array.
+SQL injection = security only.
 
-Each bug object contains:
-title
-type
-severity
-file
-line
-line_range
-evidence
-description
-impact
-fix
-confidence
+Command injection = security only.
 
-Example structure for errors:
+Hardcoded credentials = security only.
 
-errors is an array.
+Unclosed file = code_quality only.
 
-Each error object contains:
-type
-title
-file
-line
-line_range
-evidence
-description
-impact
-fix
-confidence
-
-For a division-by-zero example:
-
-Bug title:
-Division by zero
-
-Bug type:
-confirmed
-
-Error type:
-runtime
-
-Error title:
-ZeroDivisionError
-
-Do not leave "errors" empty when the supplied source directly
-demonstrates a runtime exception.
-
-Do not put security-only or performance-only findings into
-"errors".
+Inefficient algorithm = performance only.
 
 ============================================================
 SECURITY
 ============================================================
 
-Report only security issues directly supported by the source.
+Report only security issues directly supported by the
+supplied source code.
 
-The "security" object MUST contain BOTH:
+The "security" field MUST be an object.
 
-issues
-issues_found
+The security object MUST contain:
+
+- issues
+- issues_found
 
 "issues" MUST be an array of security finding objects.
 
-"issues_found" MUST be an integer equal to the number of
-objects in "issues".
+"issues_found" MUST equal the exact number of objects in
+"issues".
+
+Every security finding MUST contain ALL fields required by
+the security schema.
+
+For EVERY security issue, ALWAYS provide:
+
+- title
+- description
+- file
+- line
+- line_range
+- evidence
+- impact
+- suggestion
+- severity
+- confidence
+
+"severity" MUST be exactly one of:
+
+"critical"
+"high"
+"medium"
+"low"
+
+"confidence" MUST be an integer from 0 to 100.
 
 If there are no security issues:
 
-"issues" must be an empty array.
+"issues": []
+"issues_found": 0
 
-"issues_found" must be 0.
+Do not omit "severity".
 
-Each security issue must contain the fields required by the
-security schema.
+Do not omit "confidence".
+
+Do not invent additional fields.
+
+============================================================
+SECURITY EVIDENCE REQUIREMENTS
+============================================================
+
+Only report security issues directly supported by the
+supplied source code.
 
 Check for:
 
@@ -2028,233 +2185,263 @@ Check for:
 - authorization problems
 - sensitive information exposure
 
-Only report issues supported by the supplied source code.
+Do not infer attacker control merely because a function
+accepts a parameter.
+
+Do not report path traversal solely because open() receives
+a filename parameter.
+
+For path traversal, the source must demonstrate unsafe path
+construction or untrusted path input reaching file access.
+
+Do not classify ordinary file handling as path traversal
+without direct evidence.
 
 Do not classify performance issues as security issues.
+
 Do not classify ordinary code-quality issues as security
 issues.
 
+Only use "confirmed" language when the vulnerability is
+directly demonstrated by the supplied source.
 
-PERFORMANCE:
+============================================================
+PERFORMANCE
+============================================================
+
+Analyze performance using only the supplied source code.
+
+"performance" MUST be an object containing exactly:
+
+- time_complexity
+- space_complexity
+- issues
+
+"issues" MUST be an array.
+
+Every item inside "issues" MUST be a PerformanceIssue.
+
+A PerformanceIssue MUST contain ONLY these 9 fields:
+
+- title
+- description
+- file
+- line
+- line_range
+- evidence
+- impact
+- suggestion
+- confidence
+
+NO OTHER FIELD IS ALLOWED.
+
+In particular, NEVER generate these fields inside a
+PerformanceIssue:
+
+- type
+- severity
+- category
+- fix
+
+This restriction applies to EVERY object inside
+performance.issues.
+
+
+confidence MUST be an integer from 0 to 100.
+
+If there are no performance issues:
+
+"issues": []
+
+"time_complexity" and "space_complexity" MUST still be
+provided.
+
 Determine complexity from actual control flow.
 
-Check:
+Check for:
+
 - nested loops
 - repeated searches
 - unnecessary calculations
 - inefficient algorithms
 - scalability problems
 
+Recommendations MUST be technically appropriate for the
+identified complexity.
+
+Do not suggest an alternative algorithm unless it preserves
+the intended behavior.
+
+Do not claim that nested loops can always be replaced by a
+single loop.
+
+Do not classify performance issues as security issues.
+
+Do not classify performance issues as bugs.
+
+Do not duplicate performance findings into code_quality.
+
 ============================================================
 CODE QUALITY
 ============================================================
 
-Code quality findings are separate from bugs, security issues,
-and performance issues.
-
-The "code_quality" object MUST contain exactly these two fields:
-
-observations
-suggestions
-
-"observations" MUST be an array.
-
-"suggestions" MUST be an array.
-
-Do NOT add any other fields to the "code_quality" object.
-
-Never output:
-
-anyOf
-oneOf
-allOf
-properties
-required
-additionalProperties
-schema
-type
-
-These are schema definitions and MUST NOT appear in the
-generated JSON response.
-
-Each observation object MUST contain exactly:
-
-title
-description
-file
-line
-line_range
-evidence
-impact
-suggestion
-confidence
-
-Each suggestion object MUST contain exactly:
-
-title
-description
-file
-line
-line_range
-evidence
-impact
-suggestion
-confidence
-
-If there are no code quality findings:
-
-observations must be an empty array.
-
-suggestions must be an empty array.
-
-Do not invent code quality findings.
-
-Only report observable issues directly supported by the
+Report concrete code-quality findings supported by the
 supplied source code.
 
-Do not report security vulnerabilities as code quality
-findings.
+The "code_quality" field MUST be an object containing:
 
-Do not report performance issues as code quality findings.
+- observations
+- suggestions
 
-Do not report bugs or runtime errors as code quality findings.
+Both "observations" and "suggestions" MUST be arrays.
 
-Do not generate generic recommendations.
+Each item in BOTH arrays MUST be a CodeQualityFinding object.
 
-Do not generate schema definitions.
+Each CodeQualityFinding MUST contain ONLY these fields:
 
-Do not generate nested arrays.
+- title
+- description
+- file
+- line
+- line_range
+- evidence
+- impact
+- suggestion
+- confidence
 
-All finding arrays must contain finding objects.
+These are the ONLY allowed fields.
 
+NEVER include these fields:
+
+- type
+- severity
+- category
+- fix
+
+Do not include any other fields.
+
+This restriction applies to EVERY object inside BOTH:
+
+- observations
+- suggestions
+
+
+
+maintainability, readability, documentation, resource
+management, or organization problems.
+
+Do NOT report a bug fix as a code-quality finding.
+
+Do NOT report runtime exception handling as a code-quality
+finding when the same issue is already reported in bugs or
+errors.
+
+Do NOT duplicate security issues as code-quality findings.
+
+Do NOT duplicate performance issues as code-quality findings.
+
+Security remediation belongs in security.
+
+Performance recommendations belong in performance.
+
+Bug fixes belong in bugs.
+
+Runtime-error handling belongs in errors.
+
+If there are no code-quality findings:
+
+"observations": []
+
+"suggestions": []
+
+Only report concrete code-quality problems supported by the
+supplied source.
 
 ============================================================
-STRUCTURE
+FINAL OUTPUT RULES
 ============================================================
 
-key_methods MUST be a flat array of strings.
+Return ONLY valid JSON matching the application schema.
 
-Example values:
+Required top-level fields:
 
-"divide"
-"find_duplicates"
-"get_user"
-"execute_command"
-"calculate_average"
-"main"
-
-Never use nested arrays.
-
-key_classes MUST be a flat array of strings.
-
-If there are no classes, return an empty array.
-
-libraries MUST be a flat array of strings.
-
-Example values:
-
-"os"
-"sqlite3"
-
-Never use nested arrays.
-
-Identify every function explicitly defined in the supplied
-source.
-
-Identify every explicitly defined class.
-
-Identify libraries only from visible import statements.
-
-============================================================
-FINDING CLASSIFICATION AND DUPLICATION
-============================================================
-
-Each underlying issue must appear in the most appropriate
-category.
-
-Do not duplicate a security issue in bugs.
-
-Do not duplicate a performance issue in bugs.
-
-A confirmed runtime exception may appear in both:
-
+project
+question
+user_requirements
+review_types
+answer_summary
+files_analyzed
+key_methods
+key_classes
+libraries
 bugs
 errors
+performance
+security
+code_quality
+corrected_code
+expected_output
+score
+confidence
+final_verdict
 
-because bugs represents the defect and errors represents
-the resulting runtime exception.
-
-Do not duplicate the same finding more than once inside
-the same category.
-
-============================================================
-OUTPUT RULES
-============================================================
-
-Return ONLY valid JSON.
-
-Every top-level schema property is mandatory.
-
-Never omit properties.
+Never omit a required field.
 
 Use [] for empty arrays.
 
-Use null for nullable fields.
+Use null for nullable fields when no value exists.
 
-user_requirements MUST always be an array of strings.
+user_requirements MUST be an array of strings.
 
-corrected_code MUST always be an array.
+review_types MUST be an array of strings.
 
-If no correction is required, return an empty array.
+key_methods MUST be a flat array of strings.
 
-Do not rewrite unrelated code.
+key_classes MUST be a flat array of strings.
 
-Before returning JSON:
+libraries MUST be a flat array of strings.
 
-1. Verify every finding against source code.
-2. Verify file names.
-3. Verify line numbers.
-4. Verify finding categories.
-5. Remove duplicate findings.
-6. Verify key_methods.
-7. Verify libraries.
-8. Verify complexity.
-9. Verify confidence.
-10. Verify JSON syntax.
+bugs MUST be an array.
 
-============================================================
-STRICT JSON STRUCTURE
-============================================================
+errors MUST be an array.
 
-The response must contain data only.
+corrected_code MUST be an array.
 
-Never output JSON Schema definitions.
+performance MUST be an object.
 
-Never output:
+security MUST be an object.
 
-anyOf
-oneOf
-allOf
-properties
-required
-additionalProperties
-schema
-type definitions
+code_quality MUST be an object.
 
-These terms must not appear as structural schema metadata
-in the response.
+security MUST contain:
 
-Follow the application schema exactly.
+- issues
+- issues_found
+
+issues_found MUST equal the number of security issues.
+
+code_quality MUST contain:
+
+- observations
+- suggestions
 
 Do not invent fields.
 
-Do not omit required fields.
+Do not add schema metadata.
 
-Do not change arrays into objects.
+Do not create nested arrays where flat arrays are required.
 
-Do not change strings into arrays.
+Do not duplicate findings within a category.
 
-Do not change arrays of strings into nested arrays.
+Verify:
+
+1. All required fields are present.
+2. All field types match the schema.
+3. Findings are supported by the source.
+4. File names and line numbers are correct.
+5. No duplicate findings exist.
+6. JSON syntax is valid.
+
 
 Return ONLY the JSON object.
 """.strip()
