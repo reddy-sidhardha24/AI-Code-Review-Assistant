@@ -1,20 +1,20 @@
 {
     "project_name": "pasted_code",
     "total_files": 1,
-    "total_lines": 27,
+    "total_lines": 40,
     "languages": {
-        "JavaScript": {
+        "Java": {
             "files": 1,
-            "lines": 27
+            "lines": 40
         }
     },
     "files": [
         {
-            "name": "main.js",
-            "path": "main.js",
-            "extension": ".js",
-            "language": "JavaScript",
-            "lines": 27
+            "name": "main.java",
+            "path": "main.java",
+            "extension": ".java",
+            "language": "Java",
+            "lines": 40
         }
     ]
 }

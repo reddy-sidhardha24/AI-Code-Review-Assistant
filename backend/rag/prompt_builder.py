@@ -1222,6 +1222,34 @@ API_KEY = "sk-test-123456789"
 os.system(command)
 
 may produce three independent security findings.
+--------------------------------------------------------
+SECURITY FINDING SEPARATION
+--------------------------------------------------------
+
+Report each independently identifiable security issue as a
+separate finding.
+
+Do NOT merge multiple independent security issues into one
+finding.
+
+For example:
+
+const API_KEY = "abc123";
+const password = "admin123";
+
+MUST produce two separate findings:
+
+1. Hardcoded API key
+2. Hardcoded password
+
+If eval(userInput) is also present, report:
+
+3. Unsafe eval / arbitrary code execution
+
+Each finding must describe its own evidence.
+
+issues_found MUST equal the number of distinct security
+issues reported.
 
 For the current Pydantic schema, each security finding
 MUST contain ONLY:
@@ -1558,6 +1586,191 @@ It may be reported only when directly supported by
 the source code.
 
 --------------------------------------------------------
+SECURITY-ONLY EXCLUSION
+--------------------------------------------------------
+
+A security vulnerability MUST NOT appear in CODE QUALITY
+even if it also affects maintainability.
+
+If the primary reason for the finding is:
+
+- credential exposure
+- unsafe eval
+- injection
+- command execution
+- authentication
+- authorization
+- sensitive-data exposure
+
+classify it as SECURITY ONLY.
+
+Do NOT create a CODE QUALITY observation for the same
+security issue.
+
+Example:
+
+eval(userInput)
+-> SECURITY
+
+NOT:
+
+CODE QUALITY:
+"Unsafe use of eval"
+
+The CODE QUALITY category must contain only an independent
+maintainability/readability/organization problem.
+
+--------------------------------------------------------
+CATEGORY OWNERSHIP
+--------------------------------------------------------
+
+CODE QUALITY does NOT own remediation of findings from
+other categories.
+
+If a finding's title, description, evidence, impact, or
+suggestion is primarily about SECURITY, PERFORMANCE, BUGS,
+or ERRORS, it MUST NOT appear in CODE QUALITY.
+
+The following are NOT CODE QUALITY findings:
+
+"Missing input validation for eval"
+-> SECURITY because eval is the security concern.
+
+"Remove hardcoded credentials"
+-> SECURITY.
+
+"Move API key to environment variables"
+-> SECURITY.
+
+"Remove or replace eval"
+-> SECURITY.
+
+"Refactor duplicate detection"
+-> PERFORMANCE when the reason is O(n²).
+
+"Use a Set for duplicate detection"
+-> PERFORMANCE.
+
+"Handle division by zero"
+-> BUG or ERROR only when the detected language's semantics
+and the supplied source demonstrate incorrect behavior or
+a runtime exception.
+
+Before returning CODE QUALITY:
+
+1. Compare every observation against SECURITY,
+   PERFORMANCE, BUGS, and ERRORS.
+
+2. Compare every suggestion against those same categories.
+
+3. If an observation or suggestion is simply a remediation
+   of another category, remove it from CODE QUALITY.
+
+4. Do not create a Code Quality finding merely because
+   another category's issue could also be described as
+   maintainability-related.
+
+CODE QUALITY must contain only independently justified
+maintainability, readability, documentation, organization,
+or resource-management findings.
+
+--------------------------------------------------------
+INPUT VALIDATION EVIDENCE
+--------------------------------------------------------
+
+Do NOT report missing input validation merely because a
+function accepts parameters.
+
+Parameter validation is a Code Quality finding only when
+the supplied source demonstrates that:
+
+- invalid input is possible and affects maintainability or
+  correctness, OR
+- an explicit contract or requirement requires validation, OR
+- the absence of validation creates a directly supported
+  maintainability/resource-management problem.
+
+Do NOT assume that every function parameter requires
+runtime type or range validation.
+
+Examples:
+
+function divide(a, b) {
+    return a / b;
+}
+
+Do NOT automatically report:
+
+"Missing input validation."
+
+function findDuplicates(arr) {
+    ...
+}
+
+Do NOT automatically report:
+
+"Array input is not validated."
+
+If the source does not establish a validation requirement,
+do not create a Code Quality finding.
+
+SECURITY INPUT EXCLUSION
+------------------------
+
+When input validation is discussed because an input reaches
+a security-sensitive operation such as:
+
+- eval
+- command execution
+- SQL execution
+- file access
+- deserialization
+- authentication
+
+the finding belongs to SECURITY, not CODE QUALITY.
+
+Example:
+
+eval(userInput)
+
+Do NOT create:
+
+CODE QUALITY:
+"Missing input validation for eval."
+
+The correct classification is:
+
+SECURITY:
+"Unsafe eval / arbitrary code execution."
+
+Only report missing input validation as CODE QUALITY when
+there is a separate, independently demonstrated
+maintainability or correctness reason unrelated to the
+security vulnerability.
+
+--------------------------------------------------------
+DOCUMENTATION EVIDENCE
+--------------------------------------------------------
+
+Do NOT report missing comments or documentation merely
+because a function has no comment.
+
+Report documentation as CODE QUALITY only when the source
+is sufficiently complex, non-obvious, publicly exposed,
+or otherwise demonstrates a real maintainability problem
+caused by missing documentation.
+
+Do NOT require comments for simple, self-explanatory
+functions.
+
+Do NOT create generic findings such as:
+
+"Functions lack documentation."
+
+unless the absence of documentation creates a specific,
+independent maintainability problem supported by the source.
+
+--------------------------------------------------------
 OBSERVATIONS
 --------------------------------------------------------
 
@@ -1589,6 +1802,28 @@ Do NOT use suggestions to repeat:
 - performance optimizations
 - bug fixes
 - runtime-error fixes
+
+SECURITY REMEDIATION EXCLUSION
+------------------------------
+
+CODE QUALITY suggestions MUST NEVER recommend fixing a
+SECURITY vulnerability.
+
+Do NOT include suggestions such as:
+
+- remove hardcoded credentials
+- move secrets to environment variables
+- remove eval
+- replace unsafe command execution
+- fix SQL injection
+- fix command injection
+- fix authentication vulnerabilities
+
+Those recommendations belong ONLY to SECURITY.
+
+If a security issue has already been reported under
+SECURITY, its remediation MUST NOT appear in
+CODE QUALITY suggestions.
 
 For example:
 
@@ -1758,15 +1993,32 @@ Analyze these categories independently:
 BUGS
 --------------------------------------------------------
 
-Only actual runtime or logical defects.
+Only actual functional or logical defects supported by
+the supplied source code.
+
+A bug must represent incorrect behavior, not merely code
+that could be improved.
+
+Language semantics MUST be respected.
+
+For JavaScript:
+
+10 / 0 evaluates to Infinity and does NOT throw a
+division-by-zero exception.
+
+Do NOT report JavaScript division by zero as an ERROR.
+
+Do NOT report it as a confirmed BUG unless the supplied
+source demonstrates that the resulting value causes
+incorrect behavior or violates an explicit requirement.
 
 Examples:
 
-- division by zero
-- invalid array access
+- incorrect array access when it causes incorrect behavior
 - incorrect conditions
 - incorrect calculations
 - invalid program state
+- demonstrated functional defects
 
 --------------------------------------------------------
 SECURITY
@@ -1798,15 +2050,46 @@ Examples:
 CODE QUALITY
 --------------------------------------------------------
 
-Only maintainability/readability concerns.
+Only independent maintainability, readability,
+documentation, organization, and resource-management
+problems belong here.
+
+A Code Quality finding MUST remain valid even if the
+related BUG, ERROR, SECURITY, or PERFORMANCE finding
+is removed.
 
 Examples:
 
 - poor naming
-- unnecessary complexity
+- unclear organization
+- missing documentation
 - magic numbers
-- resource management
-- duplication
+- poor separation of responsibilities
+- resource-management problems
+- duplicated implementation that independently harms
+  maintainability
+
+Do NOT classify algorithmic duplicate detection as
+duplicated code.
+
+Do NOT classify O(n²), nested loops, scalability,
+or other algorithmic complexity problems as CODE QUALITY.
+
+Do NOT classify security vulnerabilities as CODE QUALITY.
+
+Do NOT classify bug fixes as CODE QUALITY.
+
+Do NOT classify runtime-error handling as CODE QUALITY.
+
+Do NOT create a Code Quality suggestion merely because
+another category has a recommendation.
+
+For every Code Quality finding, ask:
+
+"Would this still be a Code Quality problem if the related
+security, performance, bug, or error finding were removed?"
+
+If NO, do not report it under CODE QUALITY.
 
 --------------------------------------------------------
 ERRORS
@@ -2370,6 +2653,7 @@ Return ONLY JSON.
         modes = self.detect_review_modes(
             query
         )
+        print("DETECTED REVIEW MODES:", modes)
 
         # --------------------------------------------------------
         # BUILD CONTEXT
@@ -2472,19 +2756,33 @@ A bug must represent a functional or runtime/logic defect.
 
 Examples:
 
-Division by zero = bug.
+Division by zero is a BUG only when the language semantics
+and supplied source demonstrate incorrect behavior.
 
-Incorrect calculation = bug.
+For JavaScript:
 
-SQL injection = security only.
+10 / 0 evaluates to Infinity and does NOT throw a
+division-by-zero runtime exception.
 
-Command injection = security only.
+Do NOT report JavaScript 10 / 0 as an ERROR merely because
+the divisor is zero.
 
-Hardcoded credentials = security only.
+Do NOT report it as a confirmed BUG unless the supplied
+source demonstrates that the resulting Infinity causes
+incorrect behavior or violates an explicit requirement.
 
-Unclosed file = code_quality only.
+Incorrect calculation = BUG when incorrect behavior is
+demonstrated.
 
-Inefficient algorithm = performance only.
+SQL injection = SECURITY only.
+
+Command injection = SECURITY only.
+
+Hardcoded credentials = SECURITY only.
+
+Unclosed file = CODE QUALITY only.
+
+Inefficient algorithm = PERFORMANCE only.
 
 ============================================================
 SECURITY
