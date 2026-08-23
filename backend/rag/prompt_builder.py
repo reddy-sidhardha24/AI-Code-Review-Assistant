@@ -891,20 +891,56 @@ causes incorrect behavior.
 CODE QUALITY
 --------------------------------------------------------
 
-Use CODE QUALITY for:
+Use CODE QUALITY ONLY for independent maintainability,
+readability, documentation, organization, and
+resource-management problems.
 
-- poor naming
-- duplicated code
-- unnecessary complexity
-- maintainability
-- readability
-- function organization
-- resource-management practices
-- magic numbers
-- excessive function size
-- refactoring opportunities
+Examples:
 
-Style-only problems are NOT bugs.
+- poor or misleading naming
+- genuinely duplicated implementation that independently
+  harms maintainability
+- poor function/class organization
+- excessive function or class size
+- unclear control flow that harms maintainability
+- missing or inadequate documentation
+- magic numbers or unexplained constants
+- poor separation of responsibilities
+- resource-management practices that harm maintainability
+
+IMPORTANT:
+
+"duplicated code" means duplicated implementation that
+creates a maintainability problem.
+
+It does NOT mean duplicate detection performed by an
+algorithm.
+
+"unnecessary complexity" means complexity that harms
+readability or maintainability.
+
+It does NOT mean algorithmic time or space complexity.
+
+"refactoring opportunity" is NOT by itself a Code Quality
+finding.
+
+Do NOT create a Code Quality finding merely because another
+finding has a possible refactoring or optimization.
+
+If the issue is about algorithmic efficiency, it belongs
+to PERFORMANCE.
+
+If the issue is about a security vulnerability, it belongs
+to SECURITY.
+
+If the issue is a functional defect, it belongs to BUGS.
+
+If the issue is an actual runtime exception, it belongs to
+ERRORS.
+
+A Code Quality finding must have an independent
+maintainability/readability/documentation/organization/
+resource-management basis.
 
 --------------------------------------------------------
 ERRORS
@@ -958,6 +994,42 @@ unless the user explicitly requests it.
         return """
 BUG AND ERROR ANALYSIS
 ======================
+
+LANGUAGE SEMANTICS RULE
+=======================
+
+Always evaluate runtime behavior according to the actual
+programming language shown in the retrieved source.
+
+Do NOT apply Python runtime semantics to JavaScript,
+Java, C++, or other languages.
+
+For JavaScript:
+
+- division by zero does NOT throw a runtime exception
+- 10 / 0 evaluates to Infinity
+- therefore do NOT report division by zero as an exception
+  merely because the divisor is zero
+
+Only report a JavaScript runtime error when the supplied
+source actually performs an operation that throws or can
+directly produce a supported exception.
+
+Examples:
+
+10 / 0
+-> NOT an Errors finding
+
+JSON.parse("invalid")
+-> potential runtime error when invalid input is directly
+   demonstrated
+
+undefinedVariable()
+-> runtime error when directly demonstrated
+
+Always determine runtime behavior using the semantics of
+the detected language.
+
 
 Inspect the entire retrieved source code for:
 
@@ -1086,6 +1158,51 @@ USERNAME = "..."
 
 When credentials/secrets are directly embedded in source,
 report the supported security concern.
+
+--------------------------------------------------------
+DIRECT SECURITY VULNERABILITY RULE
+--------------------------------------------------------
+
+Report security vulnerabilities when the dangerous behavior
+is directly visible in the supplied source code.
+
+Do not require speculative attacker behavior when the
+security-sensitive operation itself is clearly unsafe.
+
+Examples:
+
+JavaScript:
+
+eval(userInput)
+-> SECURITY
+
+Python:
+
+os.system(user_input)
+-> SECURITY
+
+SQL:
+
+"SELECT * FROM users WHERE name = '" + username + "'"
+-> SECURITY when the resulting query is directly constructed
+from the variable
+
+Hardcoded credentials:
+
+const API_KEY = "abc123";
+const password = "admin123";
+-> SECURITY
+
+These findings are directly supported by the source.
+
+Do NOT downgrade a directly visible security vulnerability
+to zero merely because the exact external attacker path is
+not shown.
+
+However, do not invent exploitability that the source does
+not demonstrate.
+
+--------------------------------------------------------
 
 --------------------------------------------------------
 SECURITY COMPLETENESS
@@ -1228,39 +1345,287 @@ Never guess complexity.
     # ============================================================
 
     def build_quality_rules(self) -> str:
-
         return """
 CODE QUALITY ANALYSIS
 =====================
 
-Evaluate observable characteristics such as:
+Code Quality is STRICTLY limited to independent
+maintainability, readability, documentation, organization,
+and resource-management concerns.
 
-- readability
-- naming
-- maintainability
-- unnecessary complexity
-- duplicated logic
-- function size
-- magic numbers
-- resource management
-- organization
-- separation of responsibilities
+A Code Quality finding MUST describe a problem that remains
+valid even if all BUG, ERROR, SECURITY, and PERFORMANCE
+findings are removed.
 
-Every observation must correspond to actual source code.
+--------------------------------------------------------
+ALLOWED CODE QUALITY FINDINGS
+--------------------------------------------------------
 
-Separate:
+Report issues such as:
 
+- unclear or misleading naming
+- duplicated implementation that independently harms
+  maintainability
+- poor function or class organization
+- excessive function or class size
+- unclear control flow that harms maintainability
+- missing or inadequate documentation
+- magic numbers or unexplained constants
+- poor separation of responsibilities
+- resource-management practices that harm maintainability
+- unnecessary coupling
+
+--------------------------------------------------------
+DUPLICATION RULE
+--------------------------------------------------------
+
+"Duplicated code" means duplicated implementation that
+creates a maintainability problem.
+
+It does NOT mean an algorithm that detects duplicate values.
+
+Example:
+
+for i in range(n):
+    for j in range(n):
+        if arr[i] == arr[j]:
+            ...
+
+This is an algorithmic complexity issue.
+
+Correct:
+
+PERFORMANCE:
+"O(n²) duplicate detection."
+
+Incorrect:
+
+CODE QUALITY:
+"Refactor duplicate detection."
+
+Do NOT classify algorithmic duplicate detection as
+duplicated code.
+
+--------------------------------------------------------
+COMPLEXITY RULE
+--------------------------------------------------------
+
+"Unnecessary complexity" means complexity that harms
+readability or maintainability.
+
+It does NOT mean:
+
+- O(n²)
+- O(n³)
+- nested loops
+- expensive algorithms
+- scalability problems
+- memory complexity
+
+Those belong to PERFORMANCE.
+
+--------------------------------------------------------
+REFACTORING RULE
+--------------------------------------------------------
+
+Do NOT create a Code Quality finding merely because code
+could be refactored.
+
+A refactoring suggestion is valid only when there is a
+specific independent maintainability, readability,
+organization, or documentation problem.
+
+Performance optimization belongs to PERFORMANCE.
+
+Security remediation belongs to SECURITY.
+
+Bug fixes belong to BUGS.
+
+Runtime-error handling belongs to ERRORS.
+
+--------------------------------------------------------
+SECURITY EXCLUSION
+--------------------------------------------------------
+
+Do NOT duplicate security findings into Code Quality.
+
+Examples:
+
+Hardcoded API key
+-> SECURITY ONLY
+
+Hardcoded password
+-> SECURITY ONLY
+
+eval(user_input)
+-> SECURITY ONLY when unsafe input execution is supported
+
+SQL injection
+-> SECURITY ONLY
+
+Command injection
+-> SECURITY ONLY
+
+The security remediation must remain inside SECURITY.
+
+Do NOT create a Code Quality finding such as:
+
+"Move the API key to an environment variable."
+
+--------------------------------------------------------
+PERFORMANCE EXCLUSION
+--------------------------------------------------------
+
+Do NOT duplicate performance findings into Code Quality.
+
+Examples:
+
+O(n²) algorithm
+-> PERFORMANCE ONLY
+
+Nested loops causing scalability problems
+-> PERFORMANCE ONLY
+
+Repeated linear searches
+-> PERFORMANCE ONLY
+
+Unnecessary expensive computation
+-> PERFORMANCE ONLY
+
+Do NOT create a Code Quality finding such as:
+
+"Refactor the algorithm."
+
+when the only reason is performance.
+
+--------------------------------------------------------
+BUG EXCLUSION
+--------------------------------------------------------
+
+Do NOT duplicate bugs into Code Quality.
+
+Examples:
+
+Division by zero
+-> BUG
+
+Incorrect calculation
+-> BUG
+
+Invalid array access
+-> BUG
+
+Incorrect condition
+-> BUG
+
+Do NOT create a Code Quality finding such as:
+
+"Improve division handling."
+
+when the underlying issue is a bug.
+
+--------------------------------------------------------
+ERROR EXCLUSION
+--------------------------------------------------------
+
+Do NOT duplicate runtime errors into Code Quality.
+
+Examples:
+
+Actual runtime exception
+-> ERROR
+
+Unhandled exception
+-> ERROR when the error is directly supported
+
+Do not turn runtime-error handling into a generic
+maintainability finding.
+
+--------------------------------------------------------
+INDEPENDENCE TEST
+--------------------------------------------------------
+
+Before creating every Code Quality finding, ask:
+
+"Would this still be a Code Quality problem if the related
+security, performance, bug, or error finding were removed?"
+
+If NO:
+Do NOT report it under Code Quality.
+
+If YES:
+It may be reported only when directly supported by
+the source code.
+
+--------------------------------------------------------
 OBSERVATIONS
--------------
-Things actually observed.
+--------------------------------------------------------
 
+OBSERVATIONS must contain only concrete Code Quality
+problems actually visible in the supplied source.
+
+Do not manufacture findings.
+
+Do not use generic observations such as:
+
+- "Improve the code."
+- "Code can be cleaner."
+- "Follow best practices."
+- "Refactor this."
+- "Improve performance."
+
+unless a specific independent Code Quality problem
+supports the statement.
+
+--------------------------------------------------------
 SUGGESTIONS
-------------
-Concrete improvements based on observations.
+--------------------------------------------------------
 
-Do not create generic filler.
+SUGGESTIONS must address only Code Quality observations.
 
-Do not classify style issues as bugs.
+Do NOT use suggestions to repeat:
+
+- security fixes
+- performance optimizations
+- bug fixes
+- runtime-error fixes
+
+For example:
+
+Performance:
+"O(n²) duplicate detection."
+
+Performance suggestion:
+"Use an appropriate algorithm with lower complexity
+while preserving the intended behavior."
+
+Do NOT create:
+
+Code Quality suggestion:
+"Refactor duplicate detection."
+
+--------------------------------------------------------
+FINAL VALIDATION
+--------------------------------------------------------
+
+Before returning a Code Quality finding:
+
+1. Identify exact source evidence.
+2. Identify the maintainability/readability/documentation/
+   organization/resource-management problem.
+3. Confirm it is independent of SECURITY.
+4. Confirm it is independent of PERFORMANCE.
+5. Confirm it is independent of BUGS.
+6. Confirm it is independent of ERRORS.
+7. Remove it if it fails any check.
+
+If no independent Code Quality problem exists:
+
+"observations": []
+
+"suggestions": []
+
+Do not force Code Quality findings.
 """.strip()
 
     # ============================================================
@@ -1923,25 +2288,35 @@ LIBRARIES
 
 Only libraries supported by imports or project metadata.
 
---------------------------------------------------------
-CONFIDENCE
---------------------------------------------------------
+CONFIDENCE CALIBRATION
+======================
 
-Confidence represents evidence strength.
+Confidence represents the reliability and completeness of
+the review, not simply the amount of evidence found.
+
+If an important finding is clearly visible in the retrieved
+source but is missed or incorrectly classified, overall
+confidence MUST NOT be very high.
+
+If language-specific runtime behavior is uncertain, reduce
+confidence.
+
+Do not use 90-100% confidence when important visible
+findings are uncertain, missing, or incorrectly classified.
 
 90-100:
-Directly demonstrated by source code.
+Review is strongly supported and no significant uncertainty
+or obvious missed finding is present.
 
 75-89:
-Strongly supported but conditional.
+Most findings are strongly supported but some uncertainty
+remains.
 
 50-74:
-Plausible but partially uncertain.
+Important uncertainty or incomplete evidence exists.
 
 Below 50:
-Usually omit.
-
-Do NOT automatically use 100.
+Review is weak or substantially incomplete.
 
 --------------------------------------------------------
 SCORE

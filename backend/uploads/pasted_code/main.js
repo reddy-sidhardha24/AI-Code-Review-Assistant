@@ -1,17 +1,17 @@
-const API_KEY = "secret-123";
+const API_KEY = "abc123";
 const password = "admin123";
 
 function divide(a, b) {
     return a / b;
 }
 
-function findDuplicates(items) {
-    let duplicates = [];
+function findDuplicates(arr) {
+    const duplicates = [];
 
-    for (let i = 0; i < items.length; i++) {
-        for (let j = i + 1; j < items.length; j++) {
-            if (items[i] === items[j]) {
-                duplicates.push(items[i]);
+    for (let i = 0; i < arr.length; i++) {
+        for (let j = i + 1; j < arr.length; j++) {
+            if (arr[i] === arr[j]) {
+                duplicates.push(arr[i]);
             }
         }
     }
@@ -19,14 +19,9 @@ function findDuplicates(items) {
     return duplicates;
 }
 
-function executeCommand(command) {
-    eval(command);
+function executeUserCode(userInput) {
+    return eval(userInput);
 }
 
-function main() {
-    console.log(divide(10, 0));
-    console.log(findDuplicates([1, 2, 2, 3]));
-    executeCommand(prompt("Enter command:"));
-}
-
-main();
+console.log(divide(10, 0));
+console.log(findDuplicates([1, 2, 3, 2, 4, 1]));
