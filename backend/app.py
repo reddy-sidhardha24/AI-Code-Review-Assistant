@@ -360,6 +360,15 @@ GROQ_REVIEW_SCHEMA = build_groq_schema(
     StructuredReview
 )
 
+print("\n========== GROQ SCHEMA DEBUG ==========")
+print(
+    json.dumps(
+        GROQ_REVIEW_SCHEMA,
+        indent=2,
+        ensure_ascii=False
+    )
+)
+print("=======================================\n")
 
 # ============================================================
 # CLEAN JSON

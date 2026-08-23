@@ -2,7 +2,7 @@ import java.util.*;
 
 public class Calculator {
 
-    static String PASSWORD = "javaPassword123";
+    static String PASSWORD = 'javaPassword123';
 
     static int divide(int a, int b) {
         return a / b;

@@ -1,20 +1,56 @@
 {
-    "project_name": "pasted_code",
-    "total_files": 1,
-    "total_lines": 40,
+    "project_name": "multi_language_test",
+    "total_files": 5,
+    "total_lines": 89,
     "languages": {
+        "Python": {
+            "files": 3,
+            "lines": 40
+        },
         "Java": {
             "files": 1,
-            "lines": 40
+            "lines": 28
+        },
+        "JavaScript": {
+            "files": 1,
+            "lines": 21
         }
     },
     "files": [
         {
-            "name": "main.java",
-            "path": "main.java",
+            "name": "auth.py",
+            "path": "auth.py",
+            "extension": ".py",
+            "language": "Python",
+            "lines": 7
+        },
+        {
+            "name": "Calculator.java",
+            "path": "Calculator.java",
             "extension": ".java",
             "language": "Java",
-            "lines": 40
+            "lines": 28
+        },
+        {
+            "name": "database.py",
+            "path": "database.py",
+            "extension": ".py",
+            "language": "Python",
+            "lines": 13
+        },
+        {
+            "name": "main.py",
+            "path": "main.py",
+            "extension": ".py",
+            "language": "Python",
+            "lines": 20
+        },
+        {
+            "name": "utils.js",
+            "path": "utils.js",
+            "extension": ".js",
+            "language": "JavaScript",
+            "lines": 21
         }
     ]
 }
