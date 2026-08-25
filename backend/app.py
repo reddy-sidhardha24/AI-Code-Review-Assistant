@@ -1582,7 +1582,7 @@ def review_project(
                 temperature=0.1,
 
                 reasoning_effort="low",
-                max_completion_tokens=3000,
+                max_completion_tokens=2500,
                 response_format={
                     "type": "json_schema",
                     "json_schema": {

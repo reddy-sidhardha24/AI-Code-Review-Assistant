@@ -1,0 +1,772 @@
+{
+  "type": "object",
+  "properties": {
+    "project": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "languages": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "total_files": {
+          "type": "integer"
+        },
+        "total_lines": {
+          "type": "integer"
+        }
+      },
+      "required": [
+        "name",
+        "languages",
+        "total_files",
+        "total_lines"
+      ],
+      "additionalProperties": false
+    },
+    "question": {
+      "type": "string"
+    },
+    "user_requirements": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "review_types": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "answer_summary": {
+      "type": "string"
+    },
+    "files_analyzed": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "file_name": {
+            "type": "string"
+          },
+          "path": {
+            "type": "string"
+          },
+          "language": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "file_name",
+          "path",
+          "language"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "key_methods": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "key_classes": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "libraries": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "bugs": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "title": {
+            "type": "string"
+          },
+          "type": {
+            "type": "string",
+            "enum": [
+              "confirmed",
+              "conditional",
+              "possible_risk"
+            ]
+          },
+          "severity": {
+            "type": "string",
+            "enum": [
+              "critical",
+              "high",
+              "medium",
+              "low"
+            ]
+          },
+          "file": {
+            "type": "string"
+          },
+          "line": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "line_range": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "evidence": {
+            "type": "string"
+          },
+          "description": {
+            "type": "string"
+          },
+          "impact": {
+            "type": "string"
+          },
+          "fix": {
+            "type": "string"
+          },
+          "confidence": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "title",
+          "type",
+          "severity",
+          "file",
+          "line",
+          "line_range",
+          "evidence",
+          "description",
+          "impact",
+          "fix",
+          "confidence"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "errors": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string"
+          },
+          "title": {
+            "type": "string"
+          },
+          "file": {
+            "type": "string"
+          },
+          "line": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "line_range": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "evidence": {
+            "type": "string"
+          },
+          "description": {
+            "type": "string"
+          },
+          "impact": {
+            "type": "string"
+          },
+          "fix": {
+            "type": "string"
+          },
+          "confidence": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "type",
+          "title",
+          "file",
+          "line",
+          "line_range",
+          "evidence",
+          "description",
+          "impact",
+          "fix",
+          "confidence"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "performance": {
+      "anyOf": [
+        {
+          "type": "object",
+          "properties": {
+            "time_complexity": {
+              "type": "string"
+            },
+            "space_complexity": {
+              "type": "string"
+            },
+            "issues": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "title": {
+                    "type": "string"
+                  },
+                  "description": {
+                    "type": "string"
+                  },
+                  "file": {
+                    "anyOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "line": {
+                    "anyOf": [
+                      {
+                        "type": "integer"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "line_range": {
+                    "anyOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "evidence": {
+                    "anyOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "impact": {
+                    "anyOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "suggestion": {
+                    "anyOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "confidence": {
+                    "type": "integer"
+                  }
+                },
+                "required": [
+                  "title",
+                  "description",
+                  "file",
+                  "line",
+                  "line_range",
+                  "evidence",
+                  "impact",
+                  "suggestion",
+                  "confidence"
+                ],
+                "additionalProperties": false
+              }
+            }
+          },
+          "required": [
+            "time_complexity",
+            "space_complexity",
+            "issues"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "security": {
+      "anyOf": [
+        {
+          "type": "object",
+          "properties": {
+            "issues_found": {
+              "type": "integer"
+            },
+            "issues": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "title": {
+                    "type": "string"
+                  },
+                  "description": {
+                    "type": "string"
+                  },
+                  "file": {
+                    "anyOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "line": {
+                    "anyOf": [
+                      {
+                        "type": "integer"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "line_range": {
+                    "anyOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "evidence": {
+                    "anyOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "impact": {
+                    "anyOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "suggestion": {
+                    "anyOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "severity": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "enum": [
+                          "critical",
+                          "high",
+                          "medium",
+                          "low"
+                        ]
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "confidence": {
+                    "anyOf": [
+                      {
+                        "type": "integer"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  }
+                },
+                "required": [
+                  "title",
+                  "description",
+                  "file",
+                  "line",
+                  "line_range",
+                  "evidence",
+                  "impact",
+                  "suggestion",
+                  "severity",
+                  "confidence"
+                ],
+                "additionalProperties": false
+              }
+            }
+          },
+          "required": [
+            "issues_found",
+            "issues"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "code_quality": {
+      "anyOf": [
+        {
+          "type": "object",
+          "properties": {
+            "observations": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "title": {
+                    "type": "string"
+                  },
+                  "description": {
+                    "type": "string"
+                  },
+                  "file": {
+                    "anyOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "line": {
+                    "anyOf": [
+                      {
+                        "type": "integer"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "line_range": {
+                    "anyOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "evidence": {
+                    "anyOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "impact": {
+                    "anyOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "suggestion": {
+                    "anyOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "confidence": {
+                    "anyOf": [
+                      {
+                        "type": "integer"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  }
+                },
+                "required": [
+                  "title",
+                  "description",
+                  "file",
+                  "line",
+                  "line_range",
+                  "evidence",
+                  "impact",
+                  "suggestion",
+                  "confidence"
+                ],
+                "additionalProperties": false
+              }
+            },
+            "suggestions": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "title": {
+                    "type": "string"
+                  },
+                  "description": {
+                    "type": "string"
+                  },
+                  "file": {
+                    "anyOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "line": {
+                    "anyOf": [
+                      {
+                        "type": "integer"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "line_range": {
+                    "anyOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "evidence": {
+                    "anyOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "impact": {
+                    "anyOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "suggestion": {
+                    "anyOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "confidence": {
+                    "anyOf": [
+                      {
+                        "type": "integer"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  }
+                },
+                "required": [
+                  "title",
+                  "description",
+                  "file",
+                  "line",
+                  "line_range",
+                  "evidence",
+                  "impact",
+                  "suggestion",
+                  "confidence"
+                ],
+                "additionalProperties": false
+              }
+            }
+          },
+          "required": [
+            "observations",
+            "suggestions"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "corrected_code": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "file_name": {
+            "type": "string"
+          },
+          "code": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "file_name",
+          "code"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "expected_output": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "score": {
+      "anyOf": [
+        {
+          "type": "number"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "confidence": {
+      "anyOf": [
+        {
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "final_verdict": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "project",
+    "question",
+    "user_requirements",
+    "review_types",
+    "answer_summary",
+    "files_analyzed",
+    "key_methods",
+    "key_classes",
+    "libraries",
+    "bugs",
+    "errors",
+    "performance",
+    "security",
+    "code_quality",
+    "corrected_code",
+    "expected_output",
+    "score",
+    "confidence",
+    "final_verdict"
+  ],
+  "additionalProperties": false
+}

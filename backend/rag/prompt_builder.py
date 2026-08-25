@@ -1970,15 +1970,16 @@ alone.
     # ============================================================
 
     def build_full_review_rules(self) -> str:
-
         return """
 COMPLETE PROJECT-WIDE REVIEW
 ============================
 
 Perform a comprehensive evidence-based review of the
-retrieved project context.
+ENTIRE retrieved project context.
 
-Analyze these categories independently:
+Analyze all retrieved files together.
+
+The review must cover:
 
 1. BUGS
 2. ERRORS
@@ -1990,203 +1991,126 @@ Analyze these categories independently:
 8. OUTPUT BEHAVIOR when determinable
 
 --------------------------------------------------------
-BUGS
---------------------------------------------------------
-
-Only actual functional or logical defects supported by
-the supplied source code.
-
-A bug must represent incorrect behavior, not merely code
-that could be improved.
-
-Language semantics MUST be respected.
-
-For JavaScript:
-
-10 / 0 evaluates to Infinity and does NOT throw a
-division-by-zero exception.
-
-Do NOT report JavaScript division by zero as an ERROR.
-
-Do NOT report it as a confirmed BUG unless the supplied
-source demonstrates that the resulting value causes
-incorrect behavior or violates an explicit requirement.
-
-Examples:
-
-- incorrect array access when it causes incorrect behavior
-- incorrect conditions
-- incorrect calculations
-- invalid program state
-- demonstrated functional defects
-
---------------------------------------------------------
-SECURITY
---------------------------------------------------------
-
-Only security concerns.
-
-Examples:
-
-- hardcoded password
-- hardcoded API key
-- unsafe command execution
-- injection
-- insecure authentication
-
---------------------------------------------------------
-PERFORMANCE
---------------------------------------------------------
-
-Only efficiency/scalability concerns.
-
-Examples:
-
-- O(n²) nested loops
-- repeated expensive operations
-- unnecessary memory usage
-
---------------------------------------------------------
-CODE QUALITY
---------------------------------------------------------
-
-Only independent maintainability, readability,
-documentation, organization, and resource-management
-problems belong here.
-
-A Code Quality finding MUST remain valid even if the
-related BUG, ERROR, SECURITY, or PERFORMANCE finding
-is removed.
-
-Examples:
-
-- poor naming
-- unclear organization
-- missing documentation
-- magic numbers
-- poor separation of responsibilities
-- resource-management problems
-- duplicated implementation that independently harms
-  maintainability
-
-Do NOT classify algorithmic duplicate detection as
-duplicated code.
-
-Do NOT classify O(n²), nested loops, scalability,
-or other algorithmic complexity problems as CODE QUALITY.
-
-Do NOT classify security vulnerabilities as CODE QUALITY.
-
-Do NOT classify bug fixes as CODE QUALITY.
-
-Do NOT classify runtime-error handling as CODE QUALITY.
-
-Do NOT create a Code Quality suggestion merely because
-another category has a recommendation.
-
-For every Code Quality finding, ask:
-
-"Would this still be a Code Quality problem if the related
-security, performance, bug, or error finding were removed?"
-
-If NO, do not report it under CODE QUALITY.
-
---------------------------------------------------------
-ERRORS
---------------------------------------------------------
-
-Use for distinct runtime/error-handling problems.
-
---------------------------------------------------------
-CROSS-CATEGORY RULE
---------------------------------------------------------
-
-Do not duplicate findings across categories without an
-independent reason.
-
-Examples:
-
-PASSWORD = "admin123"
--> SECURITY
--> NOT BUG
-
-API_KEY = "..."
--> SECURITY
--> NOT BUG
-
-os.system(command)
--> SECURITY when supported
--> NOT BUG merely because it is unsafe
-
-Nested loops
--> PERFORMANCE
--> NOT BUG
-
-Poor variable naming
--> CODE QUALITY
--> NOT BUG
-
---------------------------------------------------------
 COMPLETE FILE INSPECTION
 --------------------------------------------------------
 
-For EVERY retrieved file:
+Inspect EVERY retrieved file from beginning to end.
 
-1. Inspect the entire retrieved chunk.
-2. Inspect every visible function.
-3. Inspect every visible class.
-4. Inspect imports.
-5. Inspect constants.
+For every file:
+
+1. Inspect all visible source code.
+2. Inspect every function or method.
+3. Inspect every class.
+4. Inspect imports and dependencies.
+5. Inspect constants and configuration.
 6. Inspect security-sensitive operations.
-7. Inspect file/resource operations.
+7. Inspect file and resource operations.
 8. Inspect loops and algorithms.
 9. Inspect the main execution path.
-10. Continue inspecting after the first finding.
+10. Continue after finding the first issue.
 
-Do NOT stop after finding the first few issues.
+Do NOT stop after the first finding.
+
+--------------------------------------------------------
+LANGUAGE SEMANTICS
+--------------------------------------------------------
+
+Respect the actual programming language of each file.
+
+Do NOT apply Python behavior to Java.
+
+Do NOT apply Python behavior to JavaScript.
+
+Do NOT apply Java behavior to Python or JavaScript.
+
+Do NOT apply JavaScript behavior to Python or Java.
+
+Only report behavior supported by the actual source
+and the semantics of its detected language.
+
+--------------------------------------------------------
+CATEGORY OWNERSHIP
+--------------------------------------------------------
+
+Classify every finding into the single most appropriate
+category.
+
+Use the detailed category-specific rules supplied
+separately for BUGS, SECURITY, PERFORMANCE, CODE QUALITY,
+and ERRORS.
+
+Do NOT duplicate the same underlying issue across
+categories unless there is a genuinely independent reason.
+
+Security vulnerabilities belong to SECURITY.
+
+Algorithmic complexity belongs to PERFORMANCE.
+
+Functional defects belong to BUGS.
+
+Runtime/error-handling problems belong to ERRORS.
+
+Independent maintainability/readability/documentation/
+organization/resource-management problems belong to
+CODE QUALITY.
 
 --------------------------------------------------------
 COMPLETENESS
 --------------------------------------------------------
 
-Include every supported finding.
+Include every finding that is directly supported by the
+retrieved source.
 
-Omit unsupported findings.
+Do not stop after finding a few issues.
 
-Never manufacture findings.
+Do not manufacture findings.
+
+Do not infer vulnerabilities, bugs, performance problems,
+or quality issues that are not supported by source evidence.
+
+--------------------------------------------------------
+CROSS-FILE ANALYSIS
+--------------------------------------------------------
+
+Consider relationships between retrieved files when
+supported by the source.
+
+A finding belongs to the file where the problematic code
+actually exists.
+
+Do not create findings merely because one file references
+another.
+
+--------------------------------------------------------
+FINAL REVIEW REQUIREMENT
+--------------------------------------------------------
+
+Before returning the result:
+
+1. Verify every finding against source evidence.
+2. Verify its category.
+3. Verify its filename.
+4. Verify its line number.
+5. Verify its evidence.
+6. Remove duplicate findings.
+7. Verify key methods and classes.
+8. Verify libraries.
+9. Verify complexity.
+10. Verify confidence.
+
+Return only findings supported by the retrieved source.
 """.strip()
-
     # ============================================================
     # TASK RULES
     # ============================================================
-
     def build_task_rules(
-        self,
-        modes: Set[str]
+    self,
+    modes: Set[str]
     ) -> str:
-
         rules = []
-
         if "full_review" in modes:
-
             rules.append(
                 self.build_full_review_rules()
-            )
-
-            rules.append(
-                self.build_bug_rules()
-            )
-
-            rules.append(
-                self.build_security_rules()
-            )
-
-            rules.append(
-                self.build_performance_rules()
-            )
-
-            rules.append(
-                self.build_quality_rules()
             )
 
         else:
@@ -2291,6 +2215,8 @@ the question requests one.
             "key_classes": [],
 
             "libraries": [],
+
+            "corrected_code": [],
 
             "expected_output": None,
 
