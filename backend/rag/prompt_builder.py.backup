@@ -2236,65 +2236,324 @@ the question requests one.
     # ============================================================
     # STRICT JSON OUTPUT RULES
     # ============================================================
+
     def build_output_rules_json(
         self,
         modes: Set[str]
     ) -> str:
+
         requested_modes = ", ".join(
             sorted(modes)
         )
+
         return f"""
-STRICT JSON OUTPUT
+STRICT JSON OUTPUT CONTRACT
+============================
 
 Detected review types:
 {requested_modes}
 
 Return ONLY valid JSON.
 
-Required top-level fields:
+Do NOT return:
 
-project
-question
-user_requirements
-review_types
-answer_summary
-files_analyzed
-key_methods
-key_classes
-libraries
-bugs
-errors
-performance
-security
-code_quality
-corrected_code
-expected_output
-score
-confidence
-final_verdict
+- Markdown
+- code fences
+- explanations outside JSON
+- comments
+- trailing text
 
-Rules:
+Use the supplied JSON structure.
 
-- Never omit a required field.
-- Use [] for empty arrays.
-- Use null for nullable values.
-- key_methods, key_classes, and libraries are flat string arrays.
-- files_analyzed contains objects with file_name, path, language.
-- performance must contain time_complexity, space_complexity, issues.
-- security must contain issues and issues_found.
-- issues_found must equal the number of security issues.
-- code_quality must contain observations and suggestions.
-- confidence must be an integer from 0 to 100.
-- score must be null unless explicitly requested.
-- expected_output must be null when exact output is unknown.
-- final_verdict must always be present.
-- Do not add fields outside the application schema.
-- Do not duplicate findings.
-- Verify filenames, lines, evidence, categories, and JSON syntax.
+--------------------------------------------------------
+FILES ANALYZED
+--------------------------------------------------------
 
-Return ONLY the JSON object.
+files_analyzed MUST contain OBJECTS.
+
+NEVER return filenames as plain strings.
+
+CORRECT:
+
+"files_analyzed": [
+  {{
+    "file_name": "main.py",
+    "path": "uploads\\\\pasted_code\\\\main.py",
+    "language": "Python"
+  }}
+]
+
+INCORRECT:
+
+"files_analyzed": [
+  "main.py"
+]
+
+Every object MUST contain:
+
+- file_name
+- path
+- language
+
+Use the exact values from the retrieved source context.
+
+--------------------------------------------------------
+BUGS
+--------------------------------------------------------
+
+bugs contains ONLY actual runtime/logical defects.
+
+Security-only findings:
+NOT bugs.
+
+Performance-only findings:
+NOT bugs.
+
+Code-quality-only findings:
+NOT bugs.
+
+If none:
+
+"bugs": []
+
+--------------------------------------------------------
+ERRORS
+--------------------------------------------------------
+
+errors contains only supported runtime/error-handling
+problems.
+
+Do not duplicate an identical bug unless there is a
+meaningful distinction.
+
+--------------------------------------------------------
+SECURITY
+--------------------------------------------------------
+
+Use:
+
+{{
+  "issues_found": 0,
+  "issues": []
+}}
+
+issues_found MUST equal issues.length.
+
+Each security finding MUST contain ONLY:
+
+{{
+  "title": "",
+  "description": ""
+}}
+
+Do NOT include:
+
+- file
+- line
+- line_range
+- evidence
+- impact
+- suggestion
+- confidence
+
+--------------------------------------------------------
+PERFORMANCE
+--------------------------------------------------------
+
+Use:
+
+{{
+  "time_complexity": "",
+  "space_complexity": "",
+  "issues": []
+}}
+
+Each performance issue:
+
+{{
+  "title": "",
+  "description": "",
+  "file": "",
+  "line": 37,
+  "line_range": "37-37"
+  "evidence": "",
+  "impact": "",
+  "suggestion": "",
+  "confidence": 0
+}}
+
+--------------------------------------------------------
+CODE QUALITY
+--------------------------------------------------------
+
+Use:
+
+{{
+  "observations": [],
+  "suggestions": []
+}}
+
+Each finding:
+
+{{
+  "title": "",
+  "description": ""
+}}
+
+--------------------------------------------------------
+BUG STRUCTURE
+--------------------------------------------------------
+
+Each bug:
+
+{{
+  "title": "",
+  "type": "confirmed",
+  "severity": "high",
+  "file": "",
+  "line": null,
+  "line_range": null,
+  "evidence": "",
+  "description": "",
+  "impact": "",
+  "fix": "",
+  "confidence": 0
+}}
+
+type:
+
+- confirmed
+- conditional
+- possible_risk
+
+severity:
+
+- critical
+- high
+- medium
+- low
+
+confidence:
+
+integer 0-100.
+
+--------------------------------------------------------
+ERROR STRUCTURE
+--------------------------------------------------------
+
+Each error:
+
+{{
+  "type": "runtime",
+  "title": "",
+  "file": "",
+  "line": null,
+  "line_range": null,
+  "evidence": "",
+  "description": "",
+  "impact": "",
+  "fix": "",
+  "confidence": 0
+}}
+
+--------------------------------------------------------
+KEY METHODS
+--------------------------------------------------------
+
+Scan the entire retrieved source.
+
+Every visible function definition must be considered.
+
+If six functions exist, key_methods should contain all
+six.
+
+Example:
+
+"key_methods": [
+  "divide_numbers",
+  "find_duplicates",
+  "process_user",
+  "read_file",
+  "execute_command",
+  "main"
+]
+
+The number of key_methods must match the functions
+identified.
+
+--------------------------------------------------------
+KEY CLASSES
+--------------------------------------------------------
+
+Only explicitly visible classes.
+
+If none:
+
+"key_classes": []
+
+--------------------------------------------------------
+LIBRARIES
+--------------------------------------------------------
+
+Only libraries supported by imports or project metadata.
+
+CONFIDENCE CALIBRATION
+======================
+
+Confidence represents the reliability and completeness of
+the review, not simply the amount of evidence found.
+
+If an important finding is clearly visible in the retrieved
+source but is missed or incorrectly classified, overall
+confidence MUST NOT be very high.
+
+If language-specific runtime behavior is uncertain, reduce
+confidence.
+
+Do not use 90-100% confidence when important visible
+findings are uncertain, missing, or incorrectly classified.
+
+90-100:
+Review is strongly supported and no significant uncertainty
+or obvious missed finding is present.
+
+75-89:
+Most findings are strongly supported but some uncertainty
+remains.
+
+50-74:
+Important uncertainty or incomplete evidence exists.
+
+Below 50:
+Review is weak or substantially incomplete.
+
+--------------------------------------------------------
+SCORE
+--------------------------------------------------------
+
+score MUST be null unless the user explicitly asks for
+a score/rating.
+
+--------------------------------------------------------
+FINAL VALIDATION CHECK
+--------------------------------------------------------
+
+Before returning JSON:
+
+1. Validate every finding against source code.
+2. Validate category.
+3. Remove duplicates.
+4. Verify line numbers.
+5. Verify files_analyzed objects.
+6. Verify issues_found.
+7. Verify key_methods completeness.
+8. Verify complexity.
+9. Verify confidence.
+10. Verify JSON syntax.
+
+Return ONLY JSON.
 """.strip()
-        
+
     # ============================================================
     # FINAL PROMPT
     # ============================================================
@@ -2341,22 +2600,10 @@ Return ONLY the JSON object.
         requested_modes = ", ".join(
             sorted(modes)
         )
-        
 
         # --------------------------------------------------------
         # FINAL PROMPT
         # --------------------------------------------------------
-
-        task_rules = self.build_task_rules(modes)
-
-        json_schema = self.build_json_schema(
-            query,
-            modes
-        )
-
-        output_rules = self.build_output_rules_json(
-            modes
-        )
 
         prompt = f"""
 You are a senior software engineer performing a grounded
@@ -2398,24 +2645,404 @@ REVIEW TYPES
 {requested_modes}
 
 ============================================================
-TASK RULES
+ANALYSIS RULES
 ============================================================
 
-{task_rules}
 
 ============================================================
-JSON SCHEMA
+BUGS VS ERRORS
 ============================================================
 
-{json_schema}
+BUGS and ERRORS are separate fields.
+
+BUGS represent the underlying defect.
+
+ERRORS represent the resulting runtime exception.
+
+If a directly demonstrated runtime exception exists,
+the underlying defect may appear in bugs and the resulting
+exception may appear in errors.
+
+Do not invent runtime exceptions.
+
+Only report runtime errors directly demonstrated or strongly
+supported by the supplied source code.
+
+Do not classify security issues as bugs.
+
+
+Do NOT classify security vulnerabilities as bugs.
+
+Do NOT classify performance problems as bugs.
+
+Do NOT classify ordinary resource-management or
+maintainability problems as bugs.
+
+A bug must represent a functional or runtime/logic defect.
+
+Examples:
+
+Division by zero is a BUG only when the language semantics
+and supplied source demonstrate incorrect behavior.
+
+For JavaScript:
+
+10 / 0 evaluates to Infinity and does NOT throw a
+division-by-zero runtime exception.
+
+Do NOT report JavaScript 10 / 0 as an ERROR merely because
+the divisor is zero.
+
+Do NOT report it as a confirmed BUG unless the supplied
+source demonstrates that the resulting Infinity causes
+incorrect behavior or violates an explicit requirement.
+
+Incorrect calculation = BUG when incorrect behavior is
+demonstrated.
+
+SQL injection = SECURITY only.
+
+Command injection = SECURITY only.
+
+Hardcoded credentials = SECURITY only.
+
+Unclosed file = CODE QUALITY only.
+
+Inefficient algorithm = PERFORMANCE only.
 
 ============================================================
-STRICT JSON OUTPUT RULES
+SECURITY
 ============================================================
 
-{output_rules}
+Report only security issues directly supported by the
+supplied source code.
 
-Return ONLY valid JSON.
+The "security" field MUST be an object.
+
+The security object MUST contain:
+
+- issues
+- issues_found
+
+"issues" MUST be an array of security finding objects.
+
+"issues_found" MUST equal the exact number of objects in
+"issues".
+
+Every security finding MUST contain ALL fields required by
+the security schema.
+
+For EVERY security issue, ALWAYS provide:
+
+- title
+- description
+- file
+- line
+- line_range
+- evidence
+- impact
+- suggestion
+- severity
+- confidence
+
+"severity" MUST be exactly one of:
+
+"critical"
+"high"
+"medium"
+"low"
+
+"confidence" MUST be an integer from 0 to 100.
+
+If there are no security issues:
+
+"issues": []
+"issues_found": 0
+
+Do not omit "severity".
+
+Do not omit "confidence".
+
+Do not invent additional fields.
+
+============================================================
+SECURITY EVIDENCE REQUIREMENTS
+============================================================
+
+Only report security issues directly supported by the
+supplied source code.
+
+Check for:
+
+- hardcoded credentials
+- API keys
+- SQL injection
+- command injection
+- unsafe input handling
+- insecure file operations
+- authentication problems
+- authorization problems
+- sensitive information exposure
+
+Do not infer attacker control merely because a function
+accepts a parameter.
+
+Do not report path traversal solely because open() receives
+a filename parameter.
+
+For path traversal, the source must demonstrate unsafe path
+construction or untrusted path input reaching file access.
+
+Do not classify ordinary file handling as path traversal
+without direct evidence.
+
+Do not classify performance issues as security issues.
+
+Do not classify ordinary code-quality issues as security
+issues.
+
+Only use "confirmed" language when the vulnerability is
+directly demonstrated by the supplied source.
+
+============================================================
+PERFORMANCE
+============================================================
+
+Analyze performance using only the supplied source code.
+
+"performance" MUST be an object containing exactly:
+
+- time_complexity
+- space_complexity
+- issues
+
+"issues" MUST be an array.
+
+Every item inside "issues" MUST be a PerformanceIssue.
+
+A PerformanceIssue MUST contain ONLY these 9 fields:
+
+- title
+- description
+- file
+- line
+- line_range
+- evidence
+- impact
+- suggestion
+- confidence
+
+NO OTHER FIELD IS ALLOWED.
+
+In particular, NEVER generate these fields inside a
+PerformanceIssue:
+
+- type
+- severity
+- category
+- fix
+
+This restriction applies to EVERY object inside
+performance.issues.
+
+
+confidence MUST be an integer from 0 to 100.
+
+If there are no performance issues:
+
+"issues": []
+
+"time_complexity" and "space_complexity" MUST still be
+provided.
+
+Determine complexity from actual control flow.
+
+Check for:
+
+- nested loops
+- repeated searches
+- unnecessary calculations
+- inefficient algorithms
+- scalability problems
+
+Recommendations MUST be technically appropriate for the
+identified complexity.
+
+Do not suggest an alternative algorithm unless it preserves
+the intended behavior.
+
+Do not claim that nested loops can always be replaced by a
+single loop.
+
+Do not classify performance issues as security issues.
+
+Do not classify performance issues as bugs.
+
+Do not duplicate performance findings into code_quality.
+
+============================================================
+CODE QUALITY
+============================================================
+
+Report concrete code-quality findings supported by the
+supplied source code.
+
+The "code_quality" field MUST be an object containing:
+
+- observations
+- suggestions
+
+Both "observations" and "suggestions" MUST be arrays.
+
+Each item in BOTH arrays MUST be a CodeQualityFinding object.
+
+Each CodeQualityFinding MUST contain ONLY these fields:
+
+- title
+- description
+- file
+- line
+- line_range
+- evidence
+- impact
+- suggestion
+- confidence
+
+These are the ONLY allowed fields.
+
+NEVER include these fields:
+
+- type
+- severity
+- category
+- fix
+
+Do not include any other fields.
+
+This restriction applies to EVERY object inside BOTH:
+
+- observations
+- suggestions
+
+
+
+maintainability, readability, documentation, resource
+management, or organization problems.
+
+Do NOT report a bug fix as a code-quality finding.
+
+Do NOT report runtime exception handling as a code-quality
+finding when the same issue is already reported in bugs or
+errors.
+
+Do NOT duplicate security issues as code-quality findings.
+
+Do NOT duplicate performance issues as code-quality findings.
+
+Security remediation belongs in security.
+
+Performance recommendations belong in performance.
+
+Bug fixes belong in bugs.
+
+Runtime-error handling belongs in errors.
+
+If there are no code-quality findings:
+
+"observations": []
+
+"suggestions": []
+
+Only report concrete code-quality problems supported by the
+supplied source.
+
+============================================================
+FINAL OUTPUT RULES
+============================================================
+
+Return ONLY valid JSON matching the application schema.
+
+Required top-level fields:
+
+project
+question
+user_requirements
+review_types
+answer_summary
+files_analyzed
+key_methods
+key_classes
+libraries
+bugs
+errors
+performance
+security
+code_quality
+corrected_code
+expected_output
+score
+confidence
+final_verdict
+
+Never omit a required field.
+
+Use [] for empty arrays.
+
+Use null for nullable fields when no value exists.
+
+user_requirements MUST be an array of strings.
+
+review_types MUST be an array of strings.
+
+key_methods MUST be a flat array of strings.
+
+key_classes MUST be a flat array of strings.
+
+libraries MUST be a flat array of strings.
+
+bugs MUST be an array.
+
+errors MUST be an array.
+
+corrected_code MUST be an array.
+
+performance MUST be an object.
+
+security MUST be an object.
+
+code_quality MUST be an object.
+
+security MUST contain:
+
+- issues
+- issues_found
+
+issues_found MUST equal the number of security issues.
+
+code_quality MUST contain:
+
+- observations
+- suggestions
+
+Do not invent fields.
+
+Do not add schema metadata.
+
+Do not create nested arrays where flat arrays are required.
+
+Do not duplicate findings within a category.
+
+Verify:
+
+1. All required fields are present.
+2. All field types match the schema.
+3. Findings are supported by the source.
+4. File names and line numbers are correct.
+5. No duplicate findings exist.
+6. JSON syntax is valid.
+
+
+Return ONLY the JSON object.
 """.strip()
 
         return prompt

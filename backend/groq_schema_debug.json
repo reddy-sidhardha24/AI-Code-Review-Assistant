@@ -103,21 +103,21 @@
             "type": "string"
           },
           "type": {
-            "type": "string",
             "enum": [
               "confirmed",
               "conditional",
               "possible_risk"
-            ]
+            ],
+            "type": "string"
           },
           "severity": {
-            "type": "string",
             "enum": [
               "critical",
               "high",
               "medium",
               "low"
-            ]
+            ],
+            "type": "string"
           },
           "file": {
             "type": "string"
@@ -434,13 +434,13 @@
                   "severity": {
                     "anyOf": [
                       {
-                        "type": "string",
                         "enum": [
                           "critical",
                           "high",
                           "medium",
                           "low"
-                        ]
+                        ],
+                        "type": "string"
                       },
                       {
                         "type": "null"
