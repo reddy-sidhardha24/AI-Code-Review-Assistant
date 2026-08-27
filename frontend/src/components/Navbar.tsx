@@ -15,11 +15,11 @@ function Navbar() {
 
           <div className="brand-text">
             <span className="brand-title">
-              CodeReview AI
+              ReviewSphere
             </span>
 
             <span className="brand-subtitle">
-              RAG-Powered Analysis
+              RAG-Powered Project Review
             </span>
           </div>
         </NavLink>

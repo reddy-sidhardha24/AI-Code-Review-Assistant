@@ -201,7 +201,7 @@ function Home() {
           HOW IT WORKS
           ===================================================== */}
 
-      <section className="workflow-section">
+      <section className="workflow-section rag-pipeline-section">
 
         <div className="container">
 
@@ -312,7 +312,7 @@ function Home() {
           TECHNICAL ARCHITECTURE
           ===================================================== */}
 
-      <section className="workflow-section">
+      <section className="rag-pipeline-section">
 
         <div className="container">
 
