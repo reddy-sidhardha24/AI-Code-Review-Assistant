@@ -2687,38 +2687,6 @@ button:disabled {
 
 /* HEADER */
 
-.review-header-modern h1,
-.review-modern-header h1 {
-  margin: 0;
-
-  color: #edf2f7;
-
-  font-size:
-    clamp(36px, 5vw, 56px);
-
-  line-height: 1.04;
-
-  letter-spacing: -0.05em;
-}
-
-.review-header-modern h1 span,
-.review-modern-header h1 span {
-  color: var(--primary-light);
-}
-
-.review-header-modern p,
-.review-modern-header p {
-  max-width: 650px;
-
-  margin-top: 11px;
-
-  color: #758196;
-
-  font-size: 14px;
-
-  line-height: 1.6;
-}
-
 /* REVIEW INPUT */
 
 .review-input-card {
@@ -3244,44 +3212,6 @@ button:disabled {
 
 
 /* RESULT METRICS */
-
-.review-metric-card {
-  min-height: 105px;
-
-  padding: 15px;
-
-  border:
-    1px solid
-    rgba(255, 255, 255, 0.05);
-
-  border-radius: 10px;
-
-  background:
-    rgba(15, 20, 31, 0.6);
-}
-
-.review-metric-card strong {
-  display: block;
-
-  margin-top: 12px;
-
-  color: #e8edf4;
-
-  font-size: 26px;
-
-  letter-spacing: -0.04em;
-}
-
-.review-metric-card span {
-  display: block;
-
-  margin-top: 4px;
-
-  color: #68758a;
-
-  font-size: 8px;
-}
-
 
 /* ============================================================
    18. ABOUT
@@ -10421,3 +10351,4 @@ select:focus-visible {
     padding: 19px;
   }
 }
+
