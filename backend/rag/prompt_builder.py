@@ -2104,71 +2104,92 @@ Return only findings supported by the retrieved source.
     # TASK RULES
     # ============================================================
     def build_task_rules(
-    self,
-    modes: Set[str]
+        self,
+        modes: Set[str]
     ) -> str:
+
+        # Comprehensive reviews use one compact instruction set.
+        if {
+            "bug_review",
+            "security",
+            "performance",
+            "code_quality"
+        }.issubset(modes):
+
+            return """
+COMPREHENSIVE CODE REVIEW
+=========================
+
+Review the complete retrieved source code.
+
+Analyze only evidence present in the supplied project metadata
+and retrieved source code.
+
+Check:
+
+1. Bugs and runtime errors
+2. Security vulnerabilities
+3. Performance and algorithmic complexity
+4. Code quality and maintainability
+5. Functions, classes, imports, dependencies, and structure
+6. Output behavior when determinable
+
+For every finding:
+
+- Use the most appropriate category.
+- Provide exact file and line information when supported.
+- Include severity.
+- Include source-code evidence.
+- Explain impact.
+- Provide a concrete fix.
+- Do not duplicate the same underlying issue.
+- Do not invent unsupported problems.
+
+For complexity, provide time and space complexity when
+determinable from the source.
+
+Inspect the entire retrieved source.
+Do not stop after finding the first issue.
+
+Only report findings supported by the supplied source.
+""".strip()
+
         rules = []
-        if "full_review" in modes:
-            rules.append(
-                self.build_full_review_rules()
-            )
 
-        else:
+        if "explanation" in modes:
+            rules.append(self.build_explanation_rules())
 
-            if "explanation" in modes:
-                rules.append(
-                    self.build_explanation_rules()
-                )
+        if "bug_review" in modes:
+            rules.append(self.build_bug_rules())
 
-            if "bug_review" in modes:
-                rules.append(
-                    self.build_bug_rules()
-                )
+        if "security" in modes:
+            rules.append(self.build_security_rules())
 
-            if "security" in modes:
-                rules.append(
-                    self.build_security_rules()
-                )
+        if "performance" in modes:
+            rules.append(self.build_performance_rules())
 
-            if "performance" in modes:
-                rules.append(
-                    self.build_performance_rules()
-                )
-
-            if "code_quality" in modes:
-                rules.append(
-                    self.build_quality_rules()
-                )
+        if "code_quality" in modes:
+            rules.append(self.build_quality_rules())
 
         if "output" in modes:
-            rules.append(
-                self.build_output_rules()
-            )
+            rules.append(self.build_output_rules())
 
         if "structure" in modes:
-            rules.append(
-                self.build_structure_rules()
-            )
+            rules.append(self.build_structure_rules())
 
         if "libraries" in modes:
-            rules.append(
-                self.build_library_rules()
-            )
+            rules.append(self.build_library_rules())
 
         if "general" in modes:
-
-            rules.append(
-                """
+            rules.append("""
 GENERAL TASK
 ============
 
-Answer the user's question directly from the supplied
-metadata and retrieved source code.
+Answer the user's question directly from the supplied metadata
+and retrieved source code.
 
-Do not automatically perform a complete review unless
-the question requests one.
-""".strip()
-            )
+Do not perform a complete review unless requested.
+""".strip())
 
         return "\n\n".join(rules)
 
