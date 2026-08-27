@@ -10,8 +10,8 @@
     },
     "files": [
         {
-            "name": "main_test.py",
-            "path": "main_test.py",
+            "name": "main.py",
+            "path": "main.py",
             "extension": ".py",
             "language": "Python",
             "lines": 54

@@ -125,21 +125,28 @@ textarea {
 
 .app-shell {
   position: relative;
+
   min-height: 100vh;
+
   overflow-x: hidden;
 
   background:
     radial-gradient(
-      circle at 50% -15%,
-      rgba(79, 70, 229, 0.16),
-      transparent 35%
+      circle at 50% -20%,
+      rgba(79, 70, 229, 0.18),
+      transparent 38%
     ),
     radial-gradient(
-      circle at 90% 30%,
-      rgba(14, 165, 233, 0.07),
-      transparent 28%
+      circle at 100% 20%,
+      rgba(14, 165, 233, 0.08),
+      transparent 30%
     ),
-    var(--bg-main);
+    radial-gradient(
+      circle at 0% 80%,
+      rgba(139, 92, 246, 0.06),
+      transparent 30%
+    ),
+    #070b14;
 }
 
 .app-shell::before {
@@ -193,50 +200,53 @@ textarea {
    ============================================================ */
 
 .navbar {
-  min-height: 62px;
+  min-height: 68px;
 
-  padding: 0 28px;
+  padding: 0 32px;
 
   display: flex;
   align-items: center;
-  justify-content: space-between;
-
-  gap: 25px;
 
   position: sticky;
   top: 0;
   z-index: 1000;
 
-  border-bottom:
-    1px solid
-    rgba(255, 255, 255, 0.045);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.065);
 
   background:
-    rgba(7, 11, 18, 0.88);
+    rgba(7, 11, 20, 0.82);
 
-  backdrop-filter: blur(18px);
-  -webkit-backdrop-filter: blur(18px);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+
+  box-shadow:
+    0 8px 30px rgba(0, 0, 0, 0.12);
 }
 
 .navbar-inner {
-  width: 100%;
-  min-height: 62px;
+  width: min(1280px, 100%);
+
+  min-height: 68px;
+
+  margin: 0 auto;
 
   display: flex;
   align-items: center;
   justify-content: space-between;
 
-  gap: 25px;
+  gap: 28px;
 }
 
 
-/* BRAND */
+/* ============================================================
+   BRAND
+   ============================================================ */
 
 .brand {
   display: flex;
   align-items: center;
 
-  gap: 9px;
+  gap: 11px;
 
   flex-shrink: 0;
 
@@ -244,101 +254,121 @@ textarea {
 }
 
 .brand-mark {
-  width: 30px;
-  height: 30px;
+  width: 36px;
+  height: 36px;
 
   display: grid;
   place-items: center;
 
-  border-radius: 8px;
+  border: 1px solid rgba(129, 140, 248, 0.25);
+
+  border-radius: 10px;
 
   background:
     linear-gradient(
       135deg,
-      var(--primary),
-      var(--secondary)
+      rgba(99, 102, 241, 0.95),
+      rgba(139, 92, 246, 0.95)
     );
 
   color: #ffffff;
 
+  font-family:
+    "SFMono-Regular",
+    Consolas,
+    monospace;
+
   font-size: 12px;
+  font-weight: 800;
 
   box-shadow:
-    0 5px 18px
-    rgba(99, 102, 241, 0.2);
+    0 8px 24px rgba(79, 70, 229, 0.24);
+}
+
+.brand-mark span {
+  transform: translateY(-1px);
 }
 
 .brand-text {
   display: flex;
   flex-direction: column;
-  gap: 2px;
+
+  gap: 3px;
 }
 
 .brand-title {
-  color: #dfe6ef;
+  color: #eef2f7;
 
-  font-size: 11px;
+  font-size: 13px;
   font-weight: 800;
 
-  letter-spacing: -0.015em;
+  letter-spacing: -0.02em;
 }
 
 .brand-subtitle {
-  color: #4f5c70;
+  color: #657185;
 
-  font-size: 6px;
+  font-size: 7px;
+  font-weight: 700;
 
-  letter-spacing: 0.06em;
+  letter-spacing: 0.1em;
 
   text-transform: uppercase;
 }
 
 
-/* NAVIGATION */
+/* ============================================================
+   NAVIGATION
+   ============================================================ */
 
 .nav-links {
   display: flex;
   align-items: center;
   justify-content: center;
 
-  gap: 3px;
+  gap: 4px;
+
+  margin-left: auto;
 }
 
 .nav-link {
   position: relative;
 
-  min-height: 34px;
+  min-height: 38px;
 
-  padding: 0 9px;
+  padding: 0 12px;
 
   display: inline-flex;
   align-items: center;
   justify-content: center;
 
-  border-radius: 7px;
+  border-radius: 8px;
 
-  color: #68758a;
+  color: #788599;
 
-  font-size: 8px;
+  font-size: 10px;
   font-weight: 700;
 
   transition:
-    color var(--transition),
-    background var(--transition);
+    color 0.2s ease,
+    background 0.2s ease,
+    transform 0.2s ease;
 }
 
 .nav-link:hover {
-  color: #c2cbd8;
+  color: #d2dae5;
 
   background:
-    rgba(255, 255, 255, 0.035);
+    rgba(255, 255, 255, 0.045);
+
+  transform: translateY(-1px);
 }
 
 .nav-link.active {
-  color: #a5b4fc;
+  color: #b7c0ff;
 
   background:
-    rgba(99, 102, 241, 0.1);
+    rgba(99, 102, 241, 0.12);
 }
 
 .nav-link.active::after {
@@ -347,9 +377,9 @@ textarea {
   position: absolute;
 
   left: 50%;
-  bottom: 3px;
+  bottom: 4px;
 
-  width: 18px;
+  width: 20px;
   height: 2px;
 
   transform: translateX(-50%);
@@ -359,23 +389,41 @@ textarea {
   background:
     linear-gradient(
       90deg,
-      var(--primary),
-      var(--cyan)
+      #6366f1,
+      #38bdf8
     );
+
+  box-shadow:
+    0 0 10px rgba(99, 102, 241, 0.45);
 }
 
 
-/* STATUS */
+/* ============================================================
+   AI STATUS
+   ============================================================ */
 
 .nav-status {
-  display: flex;
+  display: inline-flex;
   align-items: center;
 
-  gap: 5px;
+  gap: 7px;
 
-  color: #5b687b;
+  padding: 7px 10px;
 
-  font-size: 7px;
+  flex-shrink: 0;
+
+  border:
+    1px solid
+    rgba(74, 222, 128, 0.12);
+
+  border-radius: 999px;
+
+  background:
+    rgba(74, 222, 128, 0.035);
+
+  color: #81908a;
+
+  font-size: 9px;
   font-weight: 700;
 
   white-space: nowrap;
@@ -389,13 +437,11 @@ textarea {
 
   border-radius: 50%;
 
-  background: var(--success);
+  background: #4ade80;
 
   box-shadow:
-    0 0 9px
-    rgba(74, 222, 128, 0.55);
+    0 0 10px rgba(74, 222, 128, 0.65);
 }
-
 
 /* ============================================================
    06. SHARED TYPOGRAPHY
