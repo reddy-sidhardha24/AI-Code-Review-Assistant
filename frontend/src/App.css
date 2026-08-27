@@ -2685,29 +2685,7 @@ button:disabled {
    16. REVIEW PAGE
    ============================================================ */
 
-.review-page-modern,
-.review-modern-page {
-  min-height: calc(100vh - 62px);
-
-  padding:
-    65px 0
-    100px;
-}
-
-
 /* HEADER */
-
-.review-header-modern,
-.review-modern-header {
-  display: flex;
-
-  align-items: flex-end;
-  justify-content: space-between;
-
-  gap: 25px;
-
-  margin-bottom: 30px;
-}
 
 .review-header-modern h1,
 .review-modern-header h1 {
@@ -2740,31 +2718,6 @@ button:disabled {
 
   line-height: 1.6;
 }
-
-.review-status {
-  display: inline-flex;
-
-  align-items: center;
-
-  gap: 7px;
-
-  padding: 7px 10px;
-
-  border:
-    1px solid
-    rgba(34, 197, 94, 0.13);
-
-  border-radius: 20px;
-
-  background:
-    rgba(34, 197, 94, 0.035);
-
-  color: #6ee7a0;
-
-  font-size: 8px;
-  font-weight: 700;
-}
-
 
 /* REVIEW INPUT */
 
@@ -3291,17 +3244,6 @@ button:disabled {
 
 
 /* RESULT METRICS */
-
-.review-metrics {
-  display: grid;
-
-  grid-template-columns:
-    repeat(4, 1fr);
-
-  gap: 9px;
-
-  margin-top: 12px;
-}
 
 .review-metric-card {
   min-height: 105px;
@@ -3835,30 +3777,6 @@ button:disabled {
   line-height: 1.7;
 }
 
-.review-code-panel {
-  overflow-x: auto;
-
-  margin-top: 8px;
-
-  padding: 14px;
-
-  border-radius: 8px;
-
-  background:
-    #080c14;
-
-  color: #c3cfdf;
-
-  font-family:
-    "SFMono-Regular",
-    Consolas,
-    monospace;
-
-  font-size: 9px;
-
-  line-height: 1.7;
-}
-
 .issue-critical {
   color: #f87171;
 }
@@ -3954,11 +3872,7 @@ button:disabled {
     grid-template-columns: 1fr;
   }
 
-  .review-metrics {
-    grid-template-columns:
-      repeat(2, 1fr);
   }
-}
 
 
 /* ============================================================
@@ -4467,13 +4381,7 @@ button:disabled {
     width: 100%;
   }
 
-  .review-metrics {
-    grid-template-columns:
-      1fr 1fr;
-  }
-
-
-  /* ABOUT */
+    /* ABOUT */
 
   .about-page,
   .about-page-modern {
