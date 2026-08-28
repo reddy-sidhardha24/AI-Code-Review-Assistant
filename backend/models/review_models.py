@@ -189,9 +189,9 @@ class PerformanceIssue(BaseModel):
 
 class PerformanceInfo(BaseModel):
 
-    time_complexity: str
+    time_complexity: Optional[str] = None
 
-    space_complexity: str
+    space_complexity: Optional[str] = None
 
     issues: List[
         PerformanceIssue

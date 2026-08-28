@@ -33,6 +33,38 @@ class PromptBuilder:
     ) -> Set[str]:
 
         text = query.lower().strip()
+                # ========================================================
+        # COMPREHENSIVE REVIEW
+        # ========================================================
+
+        comprehensive_patterns = [
+            "comprehensive code review",
+            "comprehensive review",
+            "complete code review",
+            "complete review",
+            "full code review",
+            "full review",
+            "complete project review",
+            "project-wide review",
+            "project wide review",
+            "analyze the entire project",
+            "analyse the entire project",
+            "review the entire project",
+            "analyze everything",
+            "analyse everything",
+            "review everything"
+        ]
+
+        if any(
+            pattern in text
+            for pattern in comprehensive_patterns
+        ):
+            return {
+                "bug_review",
+                "security",
+                "performance",
+                "code_quality"
+            }
 
         modes: Set[str] = set()
 
@@ -2297,6 +2329,50 @@ final_verdict
 Rules:
 
 - Never omit a required field.
+- Before returning JSON, verify that ALL required top-level fields
+  are present, even when their values are empty or null.
+- user_requirements MUST always be present as an array.
+- If the user did not provide explicit requirements beyond the
+  review question, return user_requirements as [].
+- review_types MUST always be present as an array.
+- files_analyzed MUST always be present as an array.
+- key_methods MUST always be present as an array.
+- key_classes MUST always be present as an array.
+- libraries MUST always be present as an array.
+- bugs MUST always be present as an array.
+- errors MUST always be present as an array.
+- corrected_code MUST always be present as an array.
+- performance MUST be present as either an object or null.
+- security MUST be present as either an object or null.
+- code_quality MUST be present as either an object or null.
+- expected_output MUST be present as either a string or null.
+- score MUST be present as either a number or null.
+The response MUST contain this complete top-level structure:
+
+{
+  "project": {...},
+  "question": "...",
+  "user_requirements": [],
+  "review_types": [],
+  "answer_summary": "...",
+  "files_analyzed": [],
+  "key_methods": [],
+  "key_classes": [],
+  "libraries": [],
+  "bugs": [],
+  "errors": [],
+  "performance": null,
+  "security": null,
+  "code_quality": null,
+  "corrected_code": [],
+  "expected_output": null,
+  "score": null,
+  "confidence": 0,
+  "final_verdict": "..."
+}
+
+Populate every field with the appropriate value. Never remove a
+field from this structure.
 - Use [] for empty arrays.
 - Use null for nullable values.
 - key_methods, key_classes, and libraries are flat string arrays.
