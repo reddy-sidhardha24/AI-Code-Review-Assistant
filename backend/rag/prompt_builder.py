@@ -33,7 +33,67 @@ class PromptBuilder:
     ) -> Set[str]:
 
         text = query.lower().strip()
-                # ========================================================
+                # --------------------------------------------------------
+        # EXPLICIT TARGETED REVIEW
+        # --------------------------------------------------------
+        # Check explicit review intent BEFORE fallback keywords.
+        # This prevents words such as "bugs", "issues", or
+        # "errors" inside instructions like "Do not report bugs"
+        # from activating unrelated review modes.
+
+        if (
+            "security review" in text
+            or "security analysis" in text
+            or "security audit" in text
+        ):
+            return {"security"}
+
+        if (
+            "bug review" in text
+            or "bug analysis" in text
+            or "debugging review" in text
+            or "runtime error review" in text
+            or "error review" in text
+        ):
+            return {"bug_review"}
+
+        if (
+            "performance review" in text
+            or "performance analysis" in text
+            or "performance audit" in text
+            or "complexity analysis" in text
+        ):
+            return {"performance"}
+
+        if (
+            "code quality review" in text
+            or "code quality analysis" in text
+            or "quality review" in text
+            or "maintainability review" in text
+            or "readability review" in text
+        ):
+            return {"code_quality"}
+
+        if (
+            "structure review" in text
+            or "structure analysis" in text
+            or "project structure" in text
+            or "analyze the structure" in text
+            or "analyse the structure" in text
+        ):
+            return {"structure"}
+
+        if (
+            "library review" in text
+            or "libraries review" in text
+            or "dependency review" in text
+            or "dependency analysis" in text
+            or "analyze dependencies" in text
+            or "analyse dependencies" in text
+        ):
+            return {"libraries"}
+        
+        # ========================================================
         # COMPREHENSIVE REVIEW
         # ========================================================
 
@@ -982,9 +1042,37 @@ Use ERRORS for distinct runtime/error-handling problems.
 
 Examples:
 
-- file opening without handling possible failure
-- missing exception handling
-- operations that can raise runtime exceptions
+- file opening without handling a failure that is directly
+  demonstrated or strongly established by the supplied source
+- missing exception handling when the source demonstrates a
+  concrete failure path
+- operations that actually throw or directly produce a
+  language-defined runtime exception
+
+IMPORTANT:
+
+Do NOT classify an operation as a runtime error merely
+because it could produce an exceptional result in another
+programming language.
+
+Runtime classification MUST follow the detected language's
+actual semantics.
+
+For JavaScript, values such as NaN, Infinity, and -Infinity
+are not runtime exceptions by themselves.
+
+For example:
+
+0 / 0
+-> produces NaN
+-> NOT an ERRORS finding
+
+10 / 0
+-> produces Infinity
+-> NOT an ERRORS finding
+
+Only report an ERRORS finding when an actual exception is
+thrown or a concrete runtime failure is demonstrated.
 
 Do not duplicate an identical finding in BUGS and ERRORS
 without a meaningful distinction.
@@ -1040,8 +1128,14 @@ For JavaScript:
 
 - division by zero does NOT throw a runtime exception
 - 10 / 0 evaluates to Infinity
-- therefore do NOT report division by zero as an exception
-  merely because the divisor is zero
+- -10 / 0 evaluates to -Infinity
+- 0 / 0 evaluates to NaN
+- therefore do NOT report division by zero as a runtime
+  exception merely because the divisor is zero
+- do NOT classify Infinity or NaN as a runtime exception
+  unless the supplied source demonstrates that the resulting
+  value causes a separate failure or violates an explicitly
+  established requirement
 
 Only report a JavaScript runtime error when the supplied
 source actually performs an operation that throws or can
@@ -1050,6 +1144,9 @@ directly produce a supported exception.
 Examples:
 
 10 / 0
+-> NOT an Errors finding
+
+0 / 0
 -> NOT an Errors finding
 
 JSON.parse("invalid")
@@ -1567,17 +1664,31 @@ Do NOT duplicate bugs into Code Quality.
 Examples:
 
 Division by zero
--> BUG
+-> BUG or ERROR only when the detected programming language
+   semantics and supplied source establish incorrect behavior
+   or a runtime exception.
+
+For JavaScript specifically:
+
+- division by zero does NOT throw an exception
+- 0 / 0 produces NaN
+- 10 / 0 produces Infinity
+- do NOT classify JavaScript division by zero as BUG or ERROR
+  merely because the divisor is zero
 
 Incorrect calculation
--> BUG
+-> BUG only when the supplied source establishes
+   that the calculated result is incorrect.
 
 Invalid array access
--> BUG
+-> BUG or ERROR only when the detected language semantics
+   establish that the access produces incorrect behavior
+   or a runtime exception.
 
 Incorrect condition
--> BUG
-
+-> BUG only when the supplied source establishes
+   incorrect functional behavior.
+   
 Do NOT create a Code Quality finding such as:
 
 "Improve division handling."
@@ -1688,6 +1799,8 @@ The following are NOT CODE QUALITY findings:
 and the supplied source demonstrate incorrect behavior or
 a runtime exception.
 
+For JavaScript, division by zero alone is NOT a BUG or ERROR.
+
 Before returning CODE QUALITY:
 
 1. Compare every observation against SECURITY,
@@ -1795,12 +1908,62 @@ caused by missing documentation.
 Do NOT require comments for simple, self-explanatory
 functions.
 
+SIMPLE FUNCTION EXCLUSION
+
+Do not report missing documentation, type hints,
+input validation, or explicit empty-input handling
+for simple, self-explanatory functions unless the
+source demonstrates a concrete independent
+maintainability problem.
+
+The fact that a function accepts an empty collection
+does not itself constitute a Code Quality finding.
+
+For example:
+
+def duplicate_check(numbers):
+    ...
+    return duplicates
+
+must NOT receive a Code Quality finding merely because
+there is no explicit empty-list check.
+
+Likewise, absence of type annotations alone is not
+sufficient evidence of a Code Quality problem for a
+small, self-contained function.
+
 Do NOT create generic findings such as:
 
 "Functions lack documentation."
 
 unless the absence of documentation creates a specific,
 independent maintainability problem supported by the source.
+
+CODE QUALITY THRESHOLD
+
+Do not report the absence of type hints, docstrings,
+comments, or documentation as a Code Quality finding
+for small, simple, self-explanatory functions.
+
+These omissions alone are not sufficient evidence of a
+meaningful maintainability or readability problem.
+
+Only report missing documentation or type annotations when
+the supplied source demonstrates a concrete reason they are
+necessary, such as complex behavior, non-obvious interfaces,
+multiple interacting components, public APIs, or a genuine
+maintainability risk.
+
+Do not create both an observation and a suggestion for the
+same underlying issue unless the observation identifies a
+distinct problem and the suggestion provides a distinct
+improvement.
+
+If no independently supported Code Quality problem exists,
+return:
+
+"observations": [],
+"suggestions": []
 
 --------------------------------------------------------
 OBSERVATIONS
@@ -1834,6 +1997,58 @@ Do NOT use suggestions to repeat:
 - performance optimizations
 - bug fixes
 - runtime-error fixes
+
+STRICT CROSS-CATEGORY SUGGESTION RULE
+-------------------------------------
+
+Every Code Quality suggestion MUST address only the
+independent Code Quality observation that it belongs to.
+
+NEVER place a BUG or ERROR remediation inside CODE QUALITY.
+
+Examples:
+
+BUG:
+"Out-of-bounds array access"
+-> BUG only
+
+BUG fix:
+"Add bounds checking"
+-> BUG only
+
+Therefore:
+
+CODE QUALITY suggestion:
+"Add bounds checking"
+-> FORBIDDEN
+
+BUG:
+"Division by zero"
+-> BUG only
+
+BUG fix:
+"Check the divisor before division"
+-> BUG only
+
+Therefore:
+
+CODE QUALITY suggestion:
+"Check the divisor"
+-> FORBIDDEN
+
+If a Code Quality observation is caused by or overlaps
+with a BUG, ERROR, SECURITY, or PERFORMANCE finding,
+remove the overlapping Code Quality suggestion.
+
+Before returning Code Quality suggestions, verify:
+
+1. Does this suggestion fix a BUG?
+2. Does this suggestion fix an ERROR?
+3. Does this suggestion fix a SECURITY issue?
+4. Does this suggestion fix a PERFORMANCE issue?
+
+If YES to any question:
+DO NOT include the suggestion in CODE QUALITY.
 
 SECURITY REMEDIATION EXCLUSION
 ------------------------------
@@ -1870,6 +2085,176 @@ Do NOT create:
 
 Code Quality suggestion:
 "Refactor duplicate detection."
+
+DOCUMENTATION AND TYPE-HINT EXCLUSION
+-------------------------------------
+
+Do NOT report missing docstrings, comments, or type hints
+as Code Quality findings merely because they are absent.
+
+Their absence alone is not a defect.
+
+Only report missing documentation or type hints when the
+supplied source demonstrates a concrete and independently
+supported problem such as:
+
+- unclear or misleading behavior that cannot reasonably be
+  understood from the code
+- a documented interface whose contract is missing or
+  contradictory
+- public API usage where the missing type information causes
+  a concrete maintainability problem supported by the source
+
+Do NOT report:
+
+- "Functions lack docstrings."
+- "Functions lack type hints."
+- "Add documentation."
+- "Add type annotations."
+
+as standalone findings without concrete source evidence.
+
+For small/simple functions whose behavior is directly
+understandable from the supplied source, missing docstrings
+and type hints MUST NOT be reported.
+
+Do not create multiple Code Quality findings from the same
+absence of documentation or type annotations.
+
+--------------------------------------------------------
+STRICT CODE QUALITY EXCLUSIONS
+--------------------------------------------------------
+
+The following are NOT Code Quality findings by themselves:
+
+1. Missing docstrings
+2. Missing type hints
+3. Missing comments
+4. Lack of annotations
+5. Lack of defensive checks
+6. Lack of input validation
+7. Generic "best practice" recommendations
+
+Do NOT report these merely because they are absent.
+
+For simple functions whose behavior is directly understandable
+from the supplied source code, missing documentation and type
+annotations are NOT a Code Quality problem.
+
+Example:
+
+def calculate_average(numbers):
+    return sum(numbers) / len(numbers)
+
+Do NOT report:
+
+"Missing docstrings and type hints."
+
+Example:
+
+def find_duplicates(numbers):
+    duplicates = []
+    for i in range(len(numbers)):
+        for j in range(i + 1, len(numbers)):
+            if numbers[i] == numbers[j]:
+                duplicates.append(numbers[i])
+    return duplicates
+
+Do NOT report missing documentation or type hints for this
+function.
+
+IMPORTANT:
+
+If the only evidence for a Code Quality finding is that a
+function lacks a docstring or type hints, REMOVE the finding.
+
+If the only recommendation is:
+
+"Add documentation and type hints"
+
+REMOVE the finding.
+
+Do NOT create separate findings for missing documentation
+and missing type hints.
+
+Do NOT infer maintainability problems solely from the absence
+of documentation or type annotations.
+
+Code Quality findings MUST have concrete, independently
+supported evidence of a meaningful maintainability,
+readability, organization, design, or resource-management
+problem.
+
+If no such evidence exists, return:
+
+"observations": []
+
+"suggestions": []
+--------------------------------------------------------
+MANDATORY FALSE-POSITIVE FILTER
+--------------------------------------------------------
+
+Before returning any Code Quality finding, apply this filter.
+
+REMOVE the finding if its evidence is ONLY:
+
+- missing docstrings
+- missing type hints
+- missing comments
+- missing annotations
+- missing input validation
+- missing empty-input checks
+- missing defensive checks
+- generic best-practice recommendations
+
+These are NOT Code Quality findings by themselves.
+
+CATEGORY OWNERSHIP IS MANDATORY.
+
+If an empty-input problem is already reported as a BUG or
+ERROR, do NOT report it again as Code Quality.
+
+Example:
+
+calculate_average([])
+
+If the source demonstrates that this causes ZeroDivisionError,
+that belongs to BUGS or ERRORS.
+
+Do NOT additionally create:
+
+Code Quality:
+"Add error handling for empty input."
+
+That would duplicate the same underlying problem.
+
+Likewise, if a function lacks a docstring and type hints but
+its behavior is directly understandable from the source:
+
+Do NOT create:
+
+"Missing documentation and type hints."
+
+If a function accepts an argument without explicit validation,
+do NOT automatically report:
+
+"No input validation."
+
+Input validation is a Code Quality finding ONLY when the
+source demonstrates a concrete maintainability/design problem
+caused by the absence of validation.
+
+FINAL DECISION:
+
+If the finding can be removed without losing evidence of an
+independent maintainability/readability/design problem,
+REMOVE IT.
+
+When in doubt, do NOT create the Code Quality finding.
+
+For the supplied simple Python test program, absence of
+docstrings, type hints, and generic input validation MUST NOT
+produce Code Quality findings.
 
 --------------------------------------------------------
 FINAL VALIDATION
@@ -2166,7 +2551,51 @@ Check:
 5. Functions, classes, imports, dependencies, and structure
 6. Output behavior when determinable
 
+LANGUAGE SEMANTICS — CRITICAL
+=============================
+
+Runtime behavior MUST be evaluated according to the actual
+programming language of the supplied source code.
+
+For JavaScript:
+
+- Division by zero does NOT throw an exception.
+- 10 / 0 evaluates to Infinity.
+- -10 / 0 evaluates to -Infinity.
+- 0 / 0 evaluates to NaN.
+- NaN and Infinity are valid JavaScript numeric values.
+- Do NOT report JavaScript division by zero as a BUG or ERROR.
+- Do NOT claim that calculateAverage([]) crashes merely
+  because it evaluates 0 / 0.
+- Only report a JavaScript runtime exception when the supplied
+  source actually throws an exception or directly demonstrates
+  an operation that throws.
+
+For example:
+
+0 / 0
+-> NaN
+-> NOT a BUG
+-> NOT an ERROR
+
+10 / 0
+-> Infinity
+-> NOT a BUG
+-> NOT an ERROR
+
+users[10]
+-> undefined
+-> NOT an array-index runtime exception.
+
+Do NOT apply Python, Java, C++, or other language semantics
+to JavaScript source code.
+
 For every finding:
+
+Code Quality findings require independent evidence.
+Do not treat generally recommended practices as findings
+unless the source demonstrates a concrete maintainability,
+readability, or design problem.
 
 - Use the most appropriate category.
 - Provide exact file and line information when supported.
@@ -2176,6 +2605,26 @@ For every finding:
 - Provide a concrete fix.
 - Do not duplicate the same underlying issue.
 - Do not invent unsupported problems.
+CATEGORY OWNERSHIP
+
+Each finding must belong to exactly one primary category.
+
+Security vulnerabilities belong ONLY to SECURITY.
+Algorithmic complexity and efficiency concerns belong ONLY
+to PERFORMANCE.
+Functional defects belong ONLY to BUGS.
+Runtime exceptions and runtime-error handling belong ONLY to ERRORS.
+Independent maintainability, readability, documentation,
+organization, or resource-management concerns belong ONLY
+to CODE QUALITY.
+
+If the same root cause appears in multiple categories,
+report it only once under the most appropriate category
+unless there is a genuinely independent problem.
+
+Do not create a Code Quality finding merely because a
+performance, security, bug, or error finding could also
+affect maintainability.
 
 For complexity, provide time and space complexity when
 determinable from the source.
@@ -2347,9 +2796,82 @@ Rules:
 - code_quality MUST be present as either an object or null.
 - expected_output MUST be present as either a string or null.
 - score MUST be present as either a number or null.
+- Every bug finding MUST include all required finding fields:
+  title, type, severity, file, line, line_range, evidence,
+  description, impact, fix, and confidence.
+- Every bug finding MUST use the exact field names required
+  by the application schema.
+- type must be one of: confirmed, conditional, possible_risk.
+- severity must be one of: critical, high, medium, low.
+- line must be an integer or null.
+- line_range must be a string or null.
+- confidence must be an integer from 0 to 100.
+- confidence MUST reflect the confidence in the returned
+  analysis and MUST NOT be 0 when the review contains
+  substantive findings or conclusions.
+- If the analysis is clearly supported by the supplied source,
+  use an appropriate confidence value between 1 and 100.
+
+- Every error finding MUST include all required finding fields:
+  type, title, file, line, line_range, evidence,
+  description, impact, fix, and confidence.
+- Every error finding MUST use the exact field names required
+  by the application schema.
+- If an error field is not applicable, use null rather than
+  omitting it.
+- Every performance issue MUST include all required finding fields:
+  title, description, file, line, line_range, evidence, impact,
+  suggestion, and confidence.
+  PERFORMANCE FINDING REQUIREMENT
+
+If the source code contains a meaningful performance or
+algorithmic complexity concern, it MUST be reported as an
+object inside performance.issues.
+
+Do not report a non-trivial time or space complexity concern
+only in time_complexity or space_complexity while leaving
+performance.issues empty.
+
+For example, if nested loops over an input collection produce
+O(n^2) time complexity, this is a meaningful performance issue
+and MUST appear in performance.issues with its exact source
+location and evidence.
+
+performance.issues may be [] only when no meaningful
+performance or algorithmic issue is supported by the source.
+- Every performance issue MUST use the exact field names
+  required by the application schema.
+- If a performance field is not applicable, use null rather than
+  omitting it.
+PERFORMANCE LOCATION ACCURACY
+
+The line and line_range of every performance finding MUST
+identify the smallest relevant source region that directly
+causes the performance issue.
+
+For nested-loop complexity, use the line containing the
+outer loop as the primary line and include the complete
+nested-loop region in line_range.
+
+Do not use the function definition line as the primary
+performance location unless the function definition itself
+causes the performance issue.
+- PERFORMANCE FIELD NAME IS STRICT:
+  Every object inside performance.issues MUST use the exact
+  field name "suggestion".
+- NEVER use "fix" for a performance issue.
+- NEVER use "recommendation" for a performance issue.
+- The performance issue object MUST contain:
+  title, description, file, line, line_range, evidence,
+  impact, suggestion, confidence.
+- If the performance suggestion is not applicable, use
+  "suggestion": null.
+- Before returning JSON, verify every performance.issues
+  object contains "suggestion" and does NOT contain "fix".
+- confidence must be an integer from 0 to 100.
 The response MUST contain this complete top-level structure:
 
-{
+{{
   "project": {...},
   "question": "...",
   "user_requirements": [],
@@ -2369,7 +2891,7 @@ The response MUST contain this complete top-level structure:
   "score": null,
   "confidence": 0,
   "final_verdict": "..."
-}
+}}
 
 Populate every field with the appropriate value. Never remove a
 field from this structure.
@@ -2381,10 +2903,15 @@ field from this structure.
 - security must contain issues and issues_found.
 - issues_found must equal the number of security issues.
 - code_quality must contain observations and suggestions.
-- confidence must be an integer from 0 to 100.
 - score must be null unless explicitly requested.
 - expected_output must be null when exact output is unknown.
 - final_verdict must always be present.
+- final_verdict MUST be consistent with the findings.
+- Do not state "No issues found" when any non-empty finding
+  exists in bugs, errors, performance.issues, security.issues,
+  or code_quality observations/suggestions.
+- If performance.issues is non-empty, final_verdict MUST
+  acknowledge the performance finding.
 - Do not add fields outside the application schema.
 - Do not duplicate findings.
 - Verify filenames, lines, evidence, categories, and JSON syntax.

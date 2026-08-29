@@ -1,20 +1,20 @@
 {
     "project_name": "pasted_code",
     "total_files": 1,
-    "total_lines": 54,
+    "total_lines": 14,
     "languages": {
-        "Python": {
+        "C++": {
             "files": 1,
-            "lines": 54
+            "lines": 14
         }
     },
     "files": [
         {
-            "name": "main.py",
-            "path": "main.py",
-            "extension": ".py",
-            "language": "Python",
-            "lines": 54
+            "name": "main.cpp",
+            "path": "main.cpp",
+            "extension": ".cpp",
+            "language": "C++",
+            "lines": 14
         }
     ]
 }
