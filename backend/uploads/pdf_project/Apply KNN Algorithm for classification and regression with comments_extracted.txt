@@ -1,0 +1,139 @@
+1. Apply KNN Algorithm for classification and 
+regressio n 
+KNN Algorithm for classification  
+import numpy as np 
+import pandas as pd 
+from sklearn.preprocessing  import LabelEncoder , StandardScaler  
+from sklearn.model_selection  import train_test_split  
+from sklearn.neighbors  import KNeighborsClassifier  
+from sklearn.metrics import accuracy_score  
+ 
+# Creating a dataset with Age, Income, Credit Score, and Loan Approval status  
+data = { 
+    "Age": [25, 30, 35, 40, 45, 50, 55, 60, 65, 70], 
+    "Income" : [30000, 40000, 50000, 60000, 70000, 80000, 90000, 100000, 
+110000, 120000], 
+    "Credit Score" : [650, 700, 750, 800, 850, 620, 780, 810, 690, 770], 
+    "Loan Approval" : ["Not Approved" , "Not Approved" , "Approved" , "Approved" , 
+"Approved" ,  
+                      "Not Approved" , "Approved" , "Approved" , "Not Approved" , 
+"Approved" ] 
+} 
+ 
+# Convert the dataset into a pandas DataFrame  
+df = pd.DataFrame (data) 
+ 
+# Label encoding the target variable 'Loan Approval' (converting 'Not 
+Approved' and 'Approved' to numeric values)  
+encoder = LabelEncoder () 
+df["Loan Approval" ] = encoder.fit_transform (df["Loan Approval" ]) 
+ 
+# Defining the feature set (X) and the target variable (y)  
+X = df[["Age", "Income" , "Credit Score" ]].values 
+y = df["Loan Approval" ].values 
+ 
+# Standardizing the features using StandardScaler to bring them to the same 
+scale 
+scaler = StandardScaler () 
+X = scaler.fit_transform (X) 
+ 
+# Splitting the data into training and testing sets (80% training, 20% 
+testing)  
+X_train, X_test, y_train, y_test = train_test_split (X, y, test_size =0.2, 
+random_state =42, stratify =y)
+
+# Creating and training a K -Nearest Neighbors (KNN) classifier with 3 
+neighbors  
+knn = KNeighborsClassifier (n_neighbors =3) 
+knn.fit(X_train, y_train) 
+ 
+# Predicting the labels for the test set  
+y_pred = knn.predict(X_test) 
+ 
+# Calculating the accuracy of the model by comparing the predicted labels with 
+the actual labels  
+accuracy  = accuracy_score (y_test, y_pred) 
+ 
+# Printing the predicted labels and the accuracy of the model  
+print("Predicted labels:" , encoder.inverse_transform (y_pred)) 
+print("Accuracy:" , accuracy ) 
+ 
+# New loan application data (Age: 37, Income: 55000, Credit Score: 720)  
+new_application  = np.array([[37, 55000, 720]]) 
+ 
+# Scaling the new application data using the same scaler used for the training 
+data 
+new_application  = scaler.transform (new_application ) 
+ 
+# Predicting the loan approval for the new application  
+predicted_label  = knn.predict(new_application ) 
+ 
+# Converting the numeric prediction back to the original labels ("Approved" or 
+"Not Approved")  
+predicted_label_name  = encoder.inverse_transform (predicted_label ) 
+ 
+# Printing the classification result for the new loan application  
+print("The new loan application is classified as:" , predicted_label_name [0]) 
+ 
+ 
+OUTPUT:  
+Predicted labels: ['Approved' 'Not Approved']  
+Accuracy: 1.0  
+The new loan application is classified as: Approved
+
+KNN Algorithm  regressio n 
+import numpy as np 
+import pandas as pd 
+from sklearn.preprocessing  import StandardScaler  
+from sklearn.model_selection  import train_test_split  
+from sklearn.neighbors  import KNeighborsRegressor  
+from sklearn.metrics import mean_squared_error  
+ 
+# New Data  
+data = { 
+    "Square Footage" : [1500, 1800, 2400, 3000, 3500, 4000, 4500, 5000, 5500, 
+6000], 
+    "Number of Bedrooms" : [3, 4, 3, 5, 4, 5, 4, 5, 6, 6], 
+    "Age of House" : [10, 15, 20, 25, 30, 35, 40, 45, 50, 55], 
+    "House Price" : [400000, 450000, 500000, 600000, 650000, 700000, 750000, 
+800000, 850000, 900000]  # Continuous target variable  
+} 
+ 
+# Convert to DataFrame  
+df = pd.DataFrame (data) 
+ 
+# Features and target variable  
+X = df[["Square Footage" , "Number of Bedrooms" , "Age of House" ]].values 
+y = df["House Price" ].values  # Continuous target variable (house price)  
+ 
+# Standardize the feature data  
+scaler = StandardScaler () 
+X = scaler.fit_transform (X) 
+ 
+# Train-Test Split  
+X_train, X_test, y_train, y_test = train_test_split (X, y, test_size =0.2, 
+random_state =42) 
+ 
+# KNN Regressor  
+knn = KNeighborsRegressor (n_neighbors =3) 
+knn.fit(X_train, y_train) 
+y_pred = knn.predict(X_test) 
+ 
+# Mean Squared Error (MSE)  
+mse = mean_squared_error (y_test, y_pred) 
+print("Predicted House Prices:" , y_pred) 
+print("Mean Squared Error:" , mse) 
+ 
+# New house price prediction  
+new_house  = np.array([[2500, 4, 30]])  # Example: 2500 sqft, 4 bedrooms, 30 
+years old  
+new_house  = scaler.transform (new_house )
+
+predicted_house_price  = knn.predict(new_house ) 
+print("The predicted price for the new house is:" , predicted_house_price [0]) 
+ 
+ 
+OUTPUT:  
+Predicted House Prices: [800000. 500000.]  
+Mean Squared Error: 2500000000.0  
+The predicted price for the new house is: 583333.3333333334

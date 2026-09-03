@@ -5397,6 +5397,90 @@ select:focus-visible {
   font-size: 8px;
 }
 
+.selected-file-name {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+
+  color: #a0aec0;
+  font-size: 9px;
+}
+
+.selected-file-size {
+  color: #59667b;
+
+  font-size: 8px;
+  white-space: nowrap;
+}
+
+.remove-file-button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  width: 18px;
+  height: 18px;
+  padding: 0;
+
+  border: none;
+  border-radius: 4px;
+
+  background: rgba(239, 68, 68, 0.12);
+
+  color: #ef4444;
+
+  font-size: 9px;
+
+  cursor: pointer;
+
+  transition:
+    background 0.15s ease;
+}
+
+.remove-file-button:hover {
+  background: rgba(239, 68, 68, 0.25);
+}
+
+.drop-zone.drag-active {
+  border-color:
+    rgba(129, 140, 248, 0.6) !important;
+
+  background:
+    radial-gradient(
+      circle at center,
+      rgba(99, 102, 241, 0.14),
+      transparent 65%
+    ) !important;
+}
+
+.upload-tabs-row2 {
+  margin-top: 0;
+}
+
+.github-input-container {
+  margin-top: 12px;
+
+  padding: 20px;
+
+  border: 1px solid
+    rgba(255, 255, 255, 0.06);
+
+  border-radius: 12px;
+
+  background:
+    rgba(15, 20, 35, 0.5);
+}
+
+.github-hint {
+  margin-top: 10px;
+
+  color: #59667b;
+
+  font-size: 9px;
+  line-height: 1.5;
+}
+
 
 /* ============================================================
    STATUS MESSAGE

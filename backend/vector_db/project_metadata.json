@@ -1,20 +1,20 @@
 {
-    "project_name": "pasted_code",
+    "project_name": "code-review-testing-repo",
     "total_files": 1,
-    "total_lines": 14,
+    "total_lines": 120,
     "languages": {
-        "C++": {
+        "HTML": {
             "files": 1,
-            "lines": 14
+            "lines": 120
         }
     },
     "files": [
         {
-            "name": "main.cpp",
-            "path": "main.cpp",
-            "extension": ".cpp",
-            "language": "C++",
-            "lines": 14
+            "name": "demo.html",
+            "path": "demo.html",
+            "extension": ".html",
+            "language": "HTML",
+            "lines": 120
         }
     ]
 }

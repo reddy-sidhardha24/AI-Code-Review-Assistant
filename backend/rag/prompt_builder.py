@@ -764,10 +764,8 @@ Files:
                     "Unknown"
                 )
 
-                content = segment.get(
-                    "content",
-                    ""
-                )
+                if len(content) > 3500:
+                    content = content[:3500] + "\n... (truncated for length)"
 
                 context_parts.append(
                     f"""
@@ -794,9 +792,14 @@ SOURCE CODE:
         if not context_parts:
             return "No valid source-code chunks retrieved."
 
-        return "\n\n".join(
+        result = "\n\n".join(
             context_parts
         )
+
+        if len(result) > 10000:
+            result = result[:10000] + "\n... (context truncated for length)"
+
+        return result
 
     # ============================================================
     # COMMON GROUNDING RULES

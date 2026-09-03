@@ -1,5 +1,10 @@
 fastapi
 uvicorn
 python-dotenv
-google-generativeai
 python-multipart
+groq
+faiss-cpu
+sentence-transformers
+PyPDF2
+python-docx
+requests

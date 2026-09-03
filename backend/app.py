@@ -153,6 +153,15 @@ class PasteCodeRequest(BaseModel):
 
 
 # ============================================================
+# GITHUB REQUEST
+# ============================================================
+
+class GithubRequest(BaseModel):
+
+    repo_url: str
+
+
+# ============================================================
 # GROQ STRICT JSON SCHEMA
 # ============================================================
 
@@ -1351,6 +1360,56 @@ def paste_code(
             status_code=500,
             detail=(
                 "Failed to process pasted code."
+            )
+        )
+
+
+# ============================================================
+# UPLOAD GITHUB REPOSITORY
+# ============================================================
+
+@app.post("/upload-github")
+async def upload_github(
+    data: GithubRequest
+):
+
+    try:
+
+        repo_url = data.repo_url.strip()
+
+        if not repo_url:
+
+            raise HTTPException(
+                status_code=400,
+                detail=(
+                    "Repository URL "
+                    "cannot be empty."
+                )
+            )
+
+        return await (
+            upload_service
+            .process_github_repo(
+                repo_url
+            )
+        )
+
+    except HTTPException:
+
+        raise
+
+    except Exception as e:
+
+        print(
+            "Upload GitHub Error:",
+            repr(e)
+        )
+
+        raise HTTPException(
+            status_code=500,
+            detail=(
+                "Failed to download "
+                "GitHub repository."
             )
         )
 

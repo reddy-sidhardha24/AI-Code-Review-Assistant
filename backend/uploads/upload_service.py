@@ -5,6 +5,9 @@ from fastapi import UploadFile
 from .zip_handler import ZipHandler
 from .file_handler import FileHandler
 from .paste_handler import PasteHandler
+from .pdf_handler import PdfHandler
+from .github_handler import GithubHandler
+from .docx_handler import DocxHandler
 
 
 class UploadService:
@@ -31,6 +34,22 @@ class UploadService:
             upload_dir
         )
 
+        # PDF Handler
+        self.pdf_handler = PdfHandler(
+            upload_dir
+        )
+
+        # GitHub Handler
+        self.github_handler = GithubHandler(
+            upload_dir,
+            extract_dir
+        )
+
+        # Document Handler
+        self.docx_handler = DocxHandler(
+            upload_dir
+        )
+
         # Shared RAG Pipeline
         self.rag_pipeline = rag_pipeline
 
@@ -43,18 +62,52 @@ class UploadService:
         file: UploadFile
     ):
 
-        upload_result = await self.zip_handler.extract_project(
-            file
+        upload_result = await (
+            self.zip_handler.extract_project(
+                file
+            )
         )
 
-        metadata = self.rag_pipeline.build_vector_database(
-            str(upload_result["project_folder"])
+        metadata = (
+            self.rag_pipeline
+            .build_vector_database(
+                str(
+                    upload_result["project_folder"]
+                )
+            )
         )
+
+        # Build summary from metadata
+        file_count = 0
+        languages = []
+
+        if metadata:
+
+            file_count = metadata.get(
+                "total_files", 0
+            )
+
+            lang_data = metadata.get(
+                "languages", {}
+            )
+
+            if isinstance(lang_data, dict):
+                languages = list(
+                    lang_data.keys()
+                )
 
         return {
             "success": True,
-            "message": "Project uploaded and indexed successfully.",
-            "project_name": upload_result["project_name"],
+            "message": (
+                f"Project uploaded and indexed "
+                f"successfully. "
+                f"{file_count} source files found."
+            ),
+            "project_name": (
+                upload_result["project_name"]
+            ),
+            "file_count": file_count,
+            "languages": languages,
             "metadata": metadata
         }
 
@@ -67,19 +120,49 @@ class UploadService:
         files: List[UploadFile]
     ):
 
-        upload_result = await self.file_handler.save_files(
-            files
+        upload_result = await (
+            self.file_handler.save_files(
+                files
+            )
         )
 
-        metadata = self.rag_pipeline.build_vector_database(
-            str(upload_result["project_folder"])
+        metadata = (
+            self.rag_pipeline
+            .build_vector_database(
+                str(
+                    upload_result["project_folder"]
+                )
+            )
         )
+
+        saved_files = upload_result.get(
+            "saved_files", []
+        )
+
+        # Build summary from metadata
+        languages = []
+
+        if metadata:
+
+            lang_data = metadata.get(
+                "languages", {}
+            )
+
+            if isinstance(lang_data, dict):
+                languages = list(
+                    lang_data.keys()
+                )
 
         return {
             "success": True,
-            "message": "Source files uploaded and indexed successfully.",
-            "project_name": "temp_project",
-            "files": upload_result["saved_files"],
+            "message": (
+                f"{len(saved_files)} source files "
+                f"uploaded and indexed successfully."
+            ),
+            "project_name": "uploaded_files",
+            "file_count": len(saved_files),
+            "files": saved_files,
+            "languages": languages,
             "metadata": metadata
         }
 
@@ -93,19 +176,169 @@ class UploadService:
         filename: str
     ):
 
-        upload_result = self.paste_handler.save_code(
-            code,
-            filename
+        upload_result = (
+            self.paste_handler.save_code(
+                code,
+                filename
+            )
         )
 
-        metadata = self.rag_pipeline.build_vector_database(
-            str(upload_result["project_folder"])
+        metadata = (
+            self.rag_pipeline
+            .build_vector_database(
+                str(
+                    upload_result["project_folder"]
+                )
+            )
         )
 
         return {
             "success": True,
-            "message": "Code uploaded and indexed successfully.",
+            "message": (
+                "Code uploaded and indexed "
+                "successfully."
+            ),
             "project_name": "pasted_code",
+            "file": (
+                upload_result["file_name"]
+            ),
+            "metadata": metadata
+        }
+
+    # ============================================================
+    # PDF Upload
+    # ============================================================
+
+    async def process_pdf_upload(
+        self,
+        file: UploadFile
+    ):
+
+        upload_result = await (
+            self.pdf_handler.extract_code(
+                file
+            )
+        )
+
+        metadata = (
+            self.rag_pipeline
+            .build_vector_database(
+                str(
+                    upload_result["project_folder"]
+                )
+            )
+        )
+
+        return {
+            "success": True,
+            "message": (
+                f"PDF processed successfully. "
+                f"Extracted {upload_result['char_count']} "
+                f"characters from "
+                f"{upload_result['page_count']} pages."
+            ),
+            "project_name": "pdf_project",
+            "file": upload_result["file_name"],
+            "page_count": (
+                upload_result["page_count"]
+            ),
+            "metadata": metadata
+        }
+
+    # ============================================================
+    # GitHub Repository
+    # ============================================================
+
+    async def process_github_repo(
+        self,
+        repo_url: str
+    ):
+
+        upload_result = await (
+            self.github_handler.clone_repo(
+                repo_url
+            )
+        )
+
+        metadata = (
+            self.rag_pipeline
+            .build_vector_database(
+                str(
+                    upload_result["project_folder"]
+                )
+            )
+        )
+
+        # Build summary from metadata
+        file_count = 0
+        languages = []
+
+        if metadata:
+
+            file_count = metadata.get(
+                "total_files", 0
+            )
+
+            lang_data = metadata.get(
+                "languages", {}
+            )
+
+            if isinstance(lang_data, dict):
+                languages = list(
+                    lang_data.keys()
+                )
+
+        return {
+            "success": True,
+            "message": (
+                f"GitHub repository "
+                f"'{upload_result['project_name']}' "
+                f"downloaded and indexed "
+                f"successfully. "
+                f"{file_count} source files found."
+            ),
+            "project_name": (
+                upload_result["project_name"]
+            ),
+            "branch": upload_result["branch"],
+            "file_count": file_count,
+            "languages": languages,
+            "metadata": metadata
+        }
+
+    # ============================================================
+    # Document Upload
+    # ============================================================
+
+    async def process_document_upload(
+        self,
+        file: UploadFile
+    ):
+
+        upload_result = await (
+            self.docx_handler.extract_code(
+                file
+            )
+        )
+
+        metadata = (
+            self.rag_pipeline
+            .build_vector_database(
+                str(
+                    upload_result["project_folder"]
+                )
+            )
+        )
+
+        return {
+            "success": True,
+            "message": (
+                f"Document processed successfully. "
+                f"Extracted "
+                f"{upload_result['char_count']} "
+                f"characters."
+            ),
+            "project_name": "doc_project",
             "file": upload_result["file_name"],
             "metadata": metadata
         }
