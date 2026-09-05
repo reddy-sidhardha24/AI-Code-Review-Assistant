@@ -1,20 +1,34 @@
 {
-    "project_name": "code-review-testing-repo",
-    "total_files": 1,
-    "total_lines": 120,
+    "project_name": "temp_project",
+    "total_files": 3,
+    "total_lines": 45,
     "languages": {
-        "HTML": {
-            "files": 1,
-            "lines": 120
+        "Python": {
+            "files": 3,
+            "lines": 45
         }
     },
     "files": [
         {
-            "name": "demo.html",
-            "path": "demo.html",
-            "extension": ".html",
-            "language": "HTML",
-            "lines": 120
+            "name": "calculator.py",
+            "path": "calculator.py",
+            "extension": ".py",
+            "language": "Python",
+            "lines": 5
+        },
+        {
+            "name": "main.py",
+            "path": "main.py",
+            "extension": ".py",
+            "language": "Python",
+            "lines": 31
+        },
+        {
+            "name": "users.py",
+            "path": "users.py",
+            "extension": ".py",
+            "language": "Python",
+            "lines": 9
         }
     ]
 }

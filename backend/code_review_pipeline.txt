@@ -1,3 +1,2479 @@
+===== RAG PIPELINE =====
+# backend/rag/pipeline.py
+
+import json
+import os
+from typing import Dict, List, Optional
+
+from .loader import ProjectLoader
+from .chunker import CodeChunker
+from .embedder import CodeEmbedder
+from .vector_store import VectorStore
+from .retriever import Retriever
+from .prompt_builder import PromptBuilder
+
+
+class RAGPipeline:
+    """
+    Main RAG pipeline for AI Code Review Assistant.
+
+    Flow:
+
+        Project
+            ↓
+        Loader
+            ↓
+        Chunker
+            ↓
+        Embedder
+            ↓
+        Fresh VectorStore
+            ↓
+        Retriever
+            ↓
+        Query Classification
+            ↓
+        Retrieval
+            ↓
+        Prompt Builder
+            ↓
+        LLM
+    """
+
+    # ============================================================
+    # Persistent paths
+    # ============================================================
+
+    VECTOR_DB_DIR = "vector_db"
+
+    INDEX_PATH = os.path.join(
+        VECTOR_DB_DIR,
+        "faiss.index"
+    )
+
+    METADATA_PATH = os.path.join(
+        VECTOR_DB_DIR,
+        "metadata.pkl"
+    )
+
+    PROJECT_METADATA_PATH = os.path.join(
+        VECTOR_DB_DIR,
+        "project_metadata.json"
+    )
+
+    # ============================================================
+    # Project-wide query phrases
+    # ============================================================
+
+    PROJECT_WIDE_PHRASES = (
+        "complete analysis",
+        "complete review",
+        "full analysis",
+        "full review",
+        "entire project",
+        "whole project",
+        "complete project",
+        "entire codebase",
+        "whole codebase",
+        "all files",
+        "every file",
+        "all bugs",
+        "all errors",
+        "find all bugs",
+        "find all errors",
+        "analyze project",
+        "analyse project",
+        "analyze the project",
+        "analyse the project",
+        "review project",
+        "review the project",
+        "analyze everything",
+        "analyse everything",
+        "review everything",
+    )
+
+    # ============================================================
+    # Constructor
+    # ============================================================
+
+    def __init__(self):
+
+        print(
+            "\nInitializing RAG Pipeline...\n"
+        )
+
+        self.loader: Optional[
+            ProjectLoader
+        ] = None
+
+        self.chunker = CodeChunker()
+
+        self.embedder = CodeEmbedder()
+
+        # --------------------------------------------------------
+        # Pipeline owns exactly one active VectorStore.
+        # --------------------------------------------------------
+
+        self.vector_store = VectorStore()
+
+        self.prompt_builder = PromptBuilder()
+
+        self.project_metadata = None
+
+        self.retriever: Optional[
+            Retriever
+        ] = None
+
+        # --------------------------------------------------------
+        # Restore last persisted project after server restart.
+        # --------------------------------------------------------
+
+        if self.vector_database_exists():
+
+            print(
+                "Existing vector database found."
+            )
+
+            try:
+
+                self.vector_store.load(
+                    index_path=self.INDEX_PATH,
+                    metadata_path=self.METADATA_PATH
+                )
+
+                self._create_retriever()
+
+                print(
+                    "Existing vector database "
+                    "and retriever loaded successfully."
+                )
+
+            except Exception as e:
+
+                print(
+                    "Could not load existing "
+                    "vector database:",
+                    repr(e)
+                )
+
+                self.vector_store = VectorStore()
+
+                self.retriever = None
+
+        # --------------------------------------------------------
+        # Load project metadata.
+        # --------------------------------------------------------
+
+        self.load_project_metadata()
+
+        print(
+            "\nRAG Pipeline Ready.\n"
+        )
+
+    # ============================================================
+    # CREATE RETRIEVER
+    # ============================================================
+
+    def _create_retriever(self):
+        """
+        Create Retriever using THIS pipeline's VectorStore.
+
+        This is critical for project isolation.
+
+        The Retriever must not independently load an old
+        vector_db/metadata.pkl when a fresh VectorStore is
+        already available.
+        """
+
+        self.retriever = Retriever(
+            vector_store=self.vector_store
+        )
+
+        # --------------------------------------------------------
+        # Diagnostic verification
+        # --------------------------------------------------------
+
+        print(
+            "\n========== RETRIEVER STATE =========="
+        )
+
+        print(
+            "Pipeline VectorStore:",
+            id(self.vector_store)
+        )
+
+        print(
+            "Retriever VectorStore:",
+            id(self.retriever.vector_store)
+        )
+
+        print(
+            "Same VectorStore:",
+            self.retriever.vector_store
+            is self.vector_store
+        )
+
+        print(
+            "Retriever chunks:",
+            self.retriever.vector_store.size()
+        )
+
+        print(
+            "Retriever files:",
+            self.retriever.vector_store.get_indexed_files()
+        )
+
+        print(
+            "=====================================\n"
+        )
+
+    # ============================================================
+    # BUILD VECTOR DATABASE
+    # ============================================================
+
+    def build_vector_database(
+        self,
+        project_path: str
+    ):
+
+        print(
+            "\n=========================================="
+        )
+
+        print(
+            "BUILDING NEW PROJECT INDEX"
+        )
+
+        print(
+            "=========================================="
+        )
+
+        print(
+            "Project Path:",
+            project_path
+        )
+
+        # ========================================================
+        # CRITICAL PROJECT RESET
+        # ========================================================
+
+        self.vector_store = VectorStore()
+
+        self.retriever = None
+
+        self.project_metadata = None
+
+        # ========================================================
+        # LOAD PROJECT
+        # ========================================================
+
+        print(
+            "\nLoading project..."
+        )
+
+        self.loader = ProjectLoader(
+            project_path
+        )
+
+        documents = self.loader.load()
+
+        if not documents:
+
+            raise ValueError(
+                "No supported source-code files "
+                "were found inside the uploaded project."
+            )
+
+        print(
+            f"Loaded {len(documents)} files."
+        )
+
+        # ========================================================
+        # PROJECT METADATA
+        # ========================================================
+
+        self.project_metadata = (
+            self.loader.get_metadata()
+        )
+
+        print(
+            "\nProject Metadata:"
+        )
+
+        print(
+            "Project Name :",
+            self.project_metadata.get(
+                "project_name",
+                "Unknown"
+            )
+        )
+
+        print(
+            "Total Files  :",
+            self.project_metadata.get(
+                "total_files",
+                0
+            )
+        )
+
+        print(
+            "Total Lines  :",
+            self.project_metadata.get(
+                "total_lines",
+                0
+            )
+        )
+
+        print(
+            "Languages    :",
+            list(
+                self.project_metadata.get(
+                    "languages",
+                    {}
+                ).keys()
+            )
+        )
+
+        # ========================================================
+        # SAVE PROJECT METADATA
+        # ========================================================
+
+        self.save_project_metadata()
+
+        # ========================================================
+        # CHUNK
+        # ========================================================
+
+        print(
+            "\nChunking..."
+        )
+
+        chunks = (
+            self.chunker.chunk_documents(
+                documents
+            )
+        )
+
+        if not chunks:
+
+            raise ValueError(
+                "No source-code chunks were generated."
+            )
+
+        print(
+            f"Generated {len(chunks)} chunks."
+        )
+
+        # ========================================================
+        # EMBEDDINGS
+        # ========================================================
+
+        print(
+            "\nGenerating embeddings..."
+        )
+
+        embedded_chunks = (
+            self.embedder.embed_chunks(
+                chunks
+            )
+        )
+
+        if not embedded_chunks:
+
+            raise ValueError(
+                "No embeddings were generated."
+            )
+
+        # ========================================================
+        # CREATE FRESH VECTOR STORE
+        # ========================================================
+
+        print(
+            "\nCreating new FAISS index..."
+        )
+
+        self.vector_store.add_chunks(
+            embedded_chunks
+        )
+
+        # ========================================================
+        # DIAGNOSTIC: AFTER INDEXING
+        # ========================================================
+
+        print(
+            "\n========== AFTER INDEXING =========="
+        )
+
+        print(
+            "VectorStore chunks:",
+            self.vector_store.size()
+        )
+
+        print(
+            "VectorStore files:",
+            self.vector_store.get_indexed_files()
+        )
+
+        print(
+            "VectorStore object:",
+            id(self.vector_store)
+        )
+
+        print(
+            "====================================\n"
+        )
+
+        # ========================================================
+        # SAVE CURRENT PROJECT
+        # ========================================================
+
+        self.vector_store.save(
+            index_path=self.INDEX_PATH,
+            metadata_path=self.METADATA_PATH
+        )
+
+        # ========================================================
+        # CREATE RETRIEVER
+        # ========================================================
+
+        print(
+            "\nCreating retriever..."
+        )
+
+        self._create_retriever()
+
+        if self.retriever is None:
+
+            raise RuntimeError(
+                "Retriever could not be initialized."
+            )
+
+        # ========================================================
+        # RETRIEVAL STATISTICS
+        # ========================================================
+
+        statistics = (
+            self.get_retrieval_statistics()
+        )
+
+        print(
+            "\n=========================================="
+        )
+
+        print(
+            "RETRIEVAL STATISTICS"
+        )
+
+        print(
+            "=========================================="
+        )
+
+        print(
+            "Indexed Files :",
+            statistics[
+                "total_indexed_files"
+            ]
+        )
+
+        print(
+            "Total Chunks  :",
+            statistics[
+                "total_chunks"
+            ]
+        )
+
+        print(
+            "=========================================="
+        )
+
+        # ========================================================
+        # INDEXED FILES
+        # ========================================================
+
+        indexed_files = (
+            self.vector_store
+            .get_indexed_files()
+        )
+
+        print(
+            "\nIndexed Files:"
+        )
+
+        for file_path in indexed_files:
+
+            print(
+                " -",
+                file_path
+            )
+
+        print(
+            "\nNew project index created successfully."
+        )
+
+        return self.project_metadata
+
+    # ============================================================
+    # QUERY CLASSIFICATION
+    # ============================================================
+
+    def classify_query(
+        self,
+        query: str
+    ) -> str:
+
+        normalized_query = (
+            query
+            .strip()
+            .lower()
+        )
+
+        # --------------------------------------------------------
+        # Explicit project-wide phrases
+        # --------------------------------------------------------
+
+        for phrase in (
+            self.PROJECT_WIDE_PHRASES
+        ):
+
+            if phrase in normalized_query:
+
+                return "project_wide"
+
+        # --------------------------------------------------------
+        # Broad categories
+        # --------------------------------------------------------
+
+        broad_categories = (
+            "bugs",
+            "errors",
+            "security",
+            "performance",
+            "quality",
+            "architecture",
+            "methods",
+            "classes",
+            "libraries",
+            "output",
+            "improvements",
+        )
+
+        category_count = sum(
+            1
+            for category in broad_categories
+            if category in normalized_query
+        )
+
+        if category_count >= 4:
+
+            return "project_wide"
+
+        return "targeted"
+
+    # ============================================================
+    # RETRIEVE CONTEXT
+    # ============================================================
+
+    def retrieve_context(
+        self,
+        query: str,
+        targeted_top_k: int = 3,
+        project_max_chunks: int = 8,
+        chunks_per_file: int = 2
+    ) -> Dict:
+
+        if self.retriever is None:
+
+            self._create_retriever()
+
+        if self.retriever is None:
+
+            raise RuntimeError(
+                "Retriever is not available."
+            )
+
+        query_type = (
+            self.classify_query(
+                query
+            )
+        )
+
+        print(
+            f"\nQuery Type: {query_type}"
+        )
+
+        # ========================================================
+        # PROJECT-WIDE
+        # ========================================================
+
+        if query_type == "project_wide":
+
+            print(
+                "Using broad project retrieval..."
+            )
+
+            chunks = (
+                self.retriever
+                .retrieve_project_wide(
+                    query=query,
+                    max_chunks=project_max_chunks,
+                    chunks_per_file=chunks_per_file
+                )
+            )
+
+        # ========================================================
+        # TARGETED
+        # ========================================================
+
+        else:
+
+            print(
+                "Using targeted semantic retrieval..."
+            )
+
+            chunks = (
+                self.retriever.retrieve(
+                    query=query,
+                    top_k=targeted_top_k
+                )
+            )
+
+        return {
+            "query_type": query_type,
+            "chunks": chunks
+        }
+
+    # ============================================================
+    # GENERATE PROMPT
+    # ============================================================
+
+    def generate_prompt(
+        self,
+        query: str,
+        targeted_top_k: int = 3,
+        project_max_chunks: int = 8,
+        chunks_per_file: int = 2
+    ):
+
+        if not query or not query.strip():
+
+            raise ValueError(
+                "Question cannot be empty."
+            )
+
+        query = query.strip()
+
+        # ========================================================
+        # VECTOR DATABASE CHECK
+        # ========================================================
+
+        if not self.vector_database_exists():
+
+            raise ValueError(
+                "No vector database found. "
+                "Please upload a project first."
+            )
+
+        # ========================================================
+        # RETRIEVER CHECK
+        # ========================================================
+
+        if self.retriever is None:
+
+            print(
+                "\nInitializing retriever..."
+            )
+
+            self.vector_store.load(
+                index_path=self.INDEX_PATH,
+                metadata_path=self.METADATA_PATH
+            )
+
+            self._create_retriever()
+
+        # ========================================================
+        # RETRIEVE
+        # ========================================================
+
+        print(
+            "\nRetrieving relevant code..."
+        )
+
+        retrieval = (
+            self.retrieve_context(
+                query=query,
+                targeted_top_k=targeted_top_k,
+                project_max_chunks=project_max_chunks,
+                chunks_per_file=chunks_per_file
+            )
+        )
+
+        query_type = (
+            retrieval["query_type"]
+        )
+
+        retrieved_chunks = (
+            retrieval["chunks"]
+        )
+
+        print(
+            f"\nRetrieved "
+            f"{len(retrieved_chunks)} chunks."
+        )
+
+        # ========================================================
+        # CRITICAL DIAGNOSTIC
+        # ========================================================
+
+        print(
+            "\n========== FINAL RETRIEVAL =========="
+        )
+
+        retrieved_files = set()
+
+        for i, chunk in enumerate(
+            retrieved_chunks,
+            start=1
+        ):
+
+            file_name = chunk.get(
+                "name",
+                "Unknown"
+            )
+
+            path = (
+                chunk.get("relative_path")
+                or chunk.get("path")
+                or "Unknown"
+            )
+
+            retrieved_files.add(
+                path
+            )
+
+            print(
+                f"{i}. "
+                f"{file_name} | "
+                f"{path} | "
+                f"Lines "
+                f"{chunk.get('start_line', '?')}-"
+                f"{chunk.get('end_line', '?')}"
+            )
+
+        print(
+            "\nRetrieved Files:",
+            sorted(retrieved_files)
+        )
+
+        print(
+            "Retrieved File Count:",
+            len(retrieved_files)
+        )
+
+        print(
+            "=====================================\n"
+        )
+
+        # ========================================================
+        # PRINT RETRIEVED CHUNKS
+        # ========================================================
+
+        self.print_retrieved_chunks(
+            retrieved_chunks
+        )
+
+        # ========================================================
+        # PROJECT METADATA
+        # ========================================================
+
+        if self.project_metadata is None:
+
+            self.load_project_metadata()
+
+        # ========================================================
+        # PROMPT
+        # ========================================================
+
+        prompt = (
+            self.prompt_builder.build_prompt(
+                query=query,
+                retrieved_chunks=retrieved_chunks,
+                project_metadata=self.project_metadata
+            )
+        )
+
+        print(
+            f"\nPrompt generated using "
+            f"{query_type} retrieval."
+        )
+
+        print(
+            "Prompt Characters:",
+            len(prompt)
+        )
+
+        return prompt
+
+    # ============================================================
+    # PRINT RETRIEVED CHUNKS
+    # ============================================================
+
+    def print_retrieved_chunks(
+        self,
+        retrieved_chunks: List[Dict]
+    ):
+
+        if not retrieved_chunks:
+
+            print(
+                "\nNo chunks retrieved."
+            )
+
+            return
+
+        print(
+            f"\nRetrieved "
+            f"{len(retrieved_chunks)} chunks."
+        )
+
+        for i, chunk in enumerate(
+            retrieved_chunks,
+            start=1
+        ):
+
+            print(
+                f"\nRetrieved Chunk {i}"
+            )
+
+            print(
+                "File:",
+                chunk.get(
+                    "name",
+                    "Unknown"
+                )
+            )
+
+            print(
+                "Path:",
+                chunk.get(
+                    "path",
+                    "Unknown"
+                )
+            )
+
+            print(
+                "Language:",
+                chunk.get(
+                    "language",
+                    "Unknown"
+                )
+            )
+
+            print(
+                "Lines:",
+                f"{chunk.get('start_line', '?')} - "
+                f"{chunk.get('end_line', '?')}"
+            )
+
+            distance = chunk.get(
+                "distance"
+            )
+
+            if distance is not None:
+
+                print(
+                    "Distance:",
+                    distance
+                )
+
+    # ============================================================
+    # SAVE PROJECT METADATA
+    # ============================================================
+
+    def save_project_metadata(
+        self,
+        metadata_path=PROJECT_METADATA_PATH
+    ):
+
+        if self.project_metadata is None:
+
+            return
+
+        directory = os.path.dirname(
+            metadata_path
+        )
+
+        if directory:
+
+            os.makedirs(
+                directory,
+                exist_ok=True
+            )
+
+        with open(
+            metadata_path,
+            "w",
+            encoding="utf-8"
+        ) as file:
+
+            json.dump(
+                self.project_metadata,
+                file,
+                indent=4
+            )
+
+        print(
+            "Current project metadata saved."
+        )
+
+    # ============================================================
+    # LOAD PROJECT METADATA
+    # ============================================================
+
+    def load_project_metadata(
+        self,
+        metadata_path=PROJECT_METADATA_PATH
+    ):
+
+        if not os.path.exists(
+            metadata_path
+        ):
+
+            self.project_metadata = None
+
+            return None
+
+        try:
+
+            with open(
+                metadata_path,
+                "r",
+                encoding="utf-8"
+            ) as file:
+
+                self.project_metadata = (
+                    json.load(file)
+                )
+
+            print(
+                "Project metadata loaded."
+            )
+
+            return self.project_metadata
+
+        except (
+            OSError,
+            json.JSONDecodeError
+        ) as e:
+
+            print(
+                "Could not load "
+                "project metadata:",
+                repr(e)
+            )
+
+            self.project_metadata = None
+
+            return None
+
+    # ============================================================
+    # VECTOR DATABASE EXISTS
+    # ============================================================
+
+    def vector_database_exists(
+        self
+    ) -> bool:
+
+        return (
+            os.path.exists(
+                self.INDEX_PATH
+            )
+            and
+            os.path.exists(
+                self.METADATA_PATH
+            )
+        )
+
+    # ============================================================
+    # RETRIEVAL STATISTICS
+    # ============================================================
+
+    def get_retrieval_statistics(
+        self
+    ) -> Dict:
+
+        total_chunks = (
+            self.vector_store.size()
+        )
+
+        total_files = (
+            self.vector_store.file_count()
+        )
+
+        return {
+            "total_chunks": total_chunks,
+            "total_indexed_files": total_files
+        }
+
+    # ============================================================
+    # PROJECT METADATA GETTER
+    # ============================================================
+
+    def get_project_metadata(
+        self
+    ):
+
+        if self.project_metadata is None:
+
+            self.load_project_metadata()
+
+        return self.project_metadata
+
+    # ============================================================
+    # CURRENT INDEXED FILES
+    # ============================================================
+
+    def get_indexed_files(
+        self
+    ) -> List[str]:
+
+        return (
+            self.vector_store
+            .get_indexed_files()
+        )
+
+
+# ================================================================
+# LOCAL TEST
+# ================================================================
+
+if __name__ == "__main__":
+
+    rag = RAGPipeline()
+
+    if not rag.vector_database_exists():
+
+        print(
+            "No vector database found."
+        )
+
+        print(
+            "Build/upload a project first."
+        )
+
+    else:
+
+        print(
+            "Vector database found."
+        )
+
+        metadata = (
+            rag.get_project_metadata()
+        )
+
+        if metadata:
+
+            print(
+                "\nProject Information"
+            )
+
+            print(
+                "Project:",
+                metadata.get(
+                    "project_name"
+                )
+            )
+
+            print(
+                "Files:",
+                metadata.get(
+                    "total_files"
+                )
+            )
+
+            print(
+                "Lines:",
+                metadata.get(
+                    "total_lines"
+                )
+            )
+
+            print(
+                "Languages:",
+                list(
+                    metadata.get(
+                        "languages",
+                        {}
+                    ).keys()
+                )
+            )
+
+        statistics = (
+            rag.get_retrieval_statistics()
+        )
+
+        print(
+            "\nRetrieval Statistics"
+        )
+
+        print(
+            "Chunks:",
+            statistics[
+                "total_chunks"
+            ]
+        )
+
+        print(
+            "Indexed Files:",
+            statistics[
+                "total_indexed_files"
+            ]
+        )
+
+        print(
+            "\nIndexed Files:"
+        )
+
+        for file_path in (
+            rag.get_indexed_files()
+        ):
+
+            print(
+                " -",
+                file_path
+            )
+
+    # ============================================================
+    # Interactive testing
+    # ============================================================
+
+    while rag.vector_database_exists():
+
+        question = input(
+            "\nAsk Question "
+            "(type 'exit' to quit): "
+        )
+
+        if (
+            question.strip().lower()
+            == "exit"
+        ):
+
+            break
+
+        try:
+
+            print(
+                "\nClassification:",
+                rag.classify_query(
+                    question
+                )
+            )
+
+            prompt = (
+                rag.generate_prompt(
+                    question
+                )
+            )
+
+            print(
+                "\nPrompt generated successfully."
+            )
+
+            print(
+                "Prompt characters:",
+                len(prompt)
+            )
+
+        except Exception as e:
+
+            print(
+                "Error:",
+                repr(e)
+            )
+===== RAG RETRIEVER =====
+# backend/rag/retriever.py
+
+from typing import Dict, List, Optional, Set
+
+from .vector_store import VectorStore
+from .embedder import CodeEmbedder
+
+
+class Retriever:
+    """
+    Advanced Retriever for the AI Code Review Assistant.
+
+    Supports:
+
+    • Intent Detection
+    • Semantic Retrieval
+    • Context Expansion
+    • Duplicate Removal
+    • Similarity Filtering
+    • Project-wide Retrieval
+
+    IMPORTANT:
+    The Retriever can receive an existing VectorStore.
+
+    This prevents the Retriever from accidentally loading
+    an older project's vector database from disk.
+    """
+
+    # ============================================================
+    # Retrieval Configuration
+    # ============================================================
+
+    MAX_DISTANCE = 2.0
+
+    DEFAULT_MODEL = "all-MiniLM-L6-v2"
+
+    DEFAULT_INDEX_PATH = "vector_db/faiss.index"
+
+    DEFAULT_METADATA_PATH = "vector_db/metadata.pkl"
+
+    # ============================================================
+    # Constructor
+    # ============================================================
+
+    def __init__(
+        self,
+        model_name: str = DEFAULT_MODEL,
+        vector_store: Optional[VectorStore] = None,
+        index_path: str = DEFAULT_INDEX_PATH,
+        metadata_path: str = DEFAULT_METADATA_PATH,
+    ):
+        """
+        Initialize the Retriever.
+
+        If vector_store is supplied:
+
+            Use the supplied VectorStore.
+
+        If vector_store is NOT supplied:
+
+            Load the persisted vector database.
+
+        This distinction is critical for project isolation.
+        """
+
+        print(
+            "\nInitializing Retriever..."
+        )
+
+        # --------------------------------------------------------
+        # Embedding model
+        # --------------------------------------------------------
+
+        print(
+            "Loading embedding model..."
+        )
+
+        self.embedder = CodeEmbedder(
+            model_name
+        )
+
+        # --------------------------------------------------------
+        # Vector store
+        # --------------------------------------------------------
+
+        if vector_store is not None:
+
+            # ====================================================
+            # IMPORTANT
+            # ====================================================
+            # Use the VectorStore already created by RAGPipeline.
+            #
+            # DO NOT load vector_db/metadata.pkl again.
+            # ====================================================
+
+            print(
+                "Using supplied VectorStore."
+            )
+
+            self.vector_store = vector_store
+
+        else:
+
+            # ----------------------------------------------------
+            # Standalone / server restart mode
+            # ----------------------------------------------------
+
+            print(
+                "No VectorStore supplied."
+            )
+
+            print(
+                "Loading vector database from disk..."
+            )
+
+            self.vector_store = VectorStore()
+
+            self.vector_store.load(
+                index_path=index_path,
+                metadata_path=metadata_path,
+            )
+
+        # --------------------------------------------------------
+        # Statistics
+        # --------------------------------------------------------
+
+        print(
+            f"Retriever Ready. "
+            f"{self.vector_store.size()} chunks indexed."
+        )
+
+        print(
+            f"Indexed Files: "
+            f"{self.vector_store.file_count()}"
+        )
+
+    # ============================================================
+    # Retrieval Statistics
+    # ============================================================
+
+    def get_retrieval_statistics(
+        self
+    ) -> Dict:
+
+        indexed_files = set()
+
+        for chunk in (
+            self.vector_store.metadata
+        ):
+
+            file_path = (
+                chunk.get("relative_path")
+                or chunk.get("path")
+                or chunk.get("file")
+                or chunk.get("name")
+                or ""
+            )
+
+            if file_path:
+
+                indexed_files.add(
+                    file_path
+                )
+
+        return {
+            "total_indexed_files": len(
+                indexed_files
+            ),
+
+            "total_chunks": len(
+                self.vector_store.metadata
+            ),
+        }
+
+    # ============================================================
+    # Intent Detection
+    # ============================================================
+
+    def detect_query_type(
+        self,
+        query: str
+    ) -> str:
+        """
+        Detect the primary intent of a review question.
+        """
+
+        q = query.lower().strip()
+
+        # --------------------------------------------------------
+        # Performance
+        # --------------------------------------------------------
+
+        performance_keywords = [
+            "performance",
+            "complexity",
+            "slow",
+            "optimize",
+            "optimization",
+            "memory",
+            "space complexity",
+            "time complexity",
+            "efficiency",
+            "inefficient",
+        ]
+
+        # --------------------------------------------------------
+        # Security
+        # --------------------------------------------------------
+
+        security_keywords = [
+            "security",
+            "vulnerability",
+            "sql injection",
+            "xss",
+            "csrf",
+            "authentication",
+            "authorization",
+            "password",
+            "api key",
+            "secret",
+            "credential",
+            "command injection",
+        ]
+
+        # --------------------------------------------------------
+        # Bugs
+        # --------------------------------------------------------
+
+        bug_keywords = [
+            "bug",
+            "bugs",
+            "error",
+            "errors",
+            "issue",
+            "issues",
+            "exception",
+            "runtime",
+            "fix",
+            "crash",
+            "incorrect",
+            "wrong",
+            "failure",
+        ]
+
+        # --------------------------------------------------------
+        # Explanation
+        # --------------------------------------------------------
+
+        explanation_keywords = [
+            "explain",
+            "what",
+            "how",
+            "purpose",
+            "working",
+            "flow",
+            "algorithm",
+            "describe",
+        ]
+
+        # --------------------------------------------------------
+        # Architecture
+        # --------------------------------------------------------
+
+        architecture_keywords = [
+            "architecture",
+            "design",
+            "structure",
+            "project",
+            "overview",
+            "workflow",
+            "modules",
+            "components",
+        ]
+
+        # --------------------------------------------------------
+        # Priority
+        # --------------------------------------------------------
+
+        if any(
+            keyword in q
+            for keyword in performance_keywords
+        ):
+
+            return "performance"
+
+        if any(
+            keyword in q
+            for keyword in security_keywords
+        ):
+
+            return "security"
+
+        if any(
+            keyword in q
+            for keyword in architecture_keywords
+        ):
+
+            return "architecture"
+
+        if any(
+            keyword in q
+            for keyword in bug_keywords
+        ):
+
+            return "bug"
+
+        if any(
+            keyword in q
+            for keyword in explanation_keywords
+        ):
+
+            return "explanation"
+
+        return "general"
+
+    # ============================================================
+    # Similarity Filter
+    # ============================================================
+
+    def filter_by_similarity(
+        self,
+        chunks: List[Dict],
+        threshold: float = MAX_DISTANCE,
+    ) -> List[Dict]:
+        """
+        Remove chunks whose FAISS distance is too large.
+        """
+
+        filtered = []
+
+        for chunk in chunks:
+
+            distance = chunk.get(
+                "distance",
+                999.0
+            )
+
+            if distance <= threshold:
+
+                filtered.append(
+                    chunk
+                )
+
+        return filtered
+
+    # ============================================================
+    # Remove Duplicate Chunks
+    # ============================================================
+
+    def remove_duplicates(
+        self,
+        chunks: List[Dict]
+    ) -> List[Dict]:
+        """
+        Remove duplicate chunks safely.
+        """
+
+        unique = []
+
+        seen: Set[str] = set()
+
+        for index, chunk in enumerate(
+            chunks
+        ):
+
+            chunk_id = chunk.get(
+                "chunk_id"
+            )
+
+            # ----------------------------------------------------
+            # Some chunks may not have a chunk_id.
+            # Create a fallback identifier.
+            # ----------------------------------------------------
+
+            if chunk_id is None:
+
+                chunk_id = (
+                    f"{chunk.get('relative_path', '')}"
+                    f":{chunk.get('start_line', '')}"
+                    f":{chunk.get('end_line', '')}"
+                    f":{index}"
+                )
+
+            chunk_key = str(
+                chunk_id
+            )
+
+            if chunk_key in seen:
+
+                continue
+
+            seen.add(
+                chunk_key
+            )
+
+            unique.append(
+                chunk
+            )
+
+        return unique
+
+    # ============================================================
+    # Find Adjacent Chunk
+    # ============================================================
+
+    def get_adjacent_chunk(
+        self,
+        current_chunk: Dict,
+        offset: int,
+    ) -> Optional[Dict]:
+        """
+        Find the previous or next chunk belonging to
+        the same source file.
+        """
+
+        current_file = (
+            current_chunk.get(
+                "relative_path"
+            )
+            or current_chunk.get(
+                "path"
+            )
+        )
+
+        current_index = (
+            current_chunk.get(
+                "file_chunk_index"
+            )
+        )
+
+        if current_file is None:
+
+            return None
+
+        if current_index is None:
+
+            return None
+
+        target_index = (
+            current_index + offset
+        )
+
+        for chunk in (
+            self.vector_store.metadata
+        ):
+
+            chunk_file = (
+                chunk.get(
+                    "relative_path"
+                )
+                or chunk.get(
+                    "path"
+                )
+            )
+
+            chunk_index = (
+                chunk.get(
+                    "file_chunk_index"
+                )
+            )
+
+            if (
+                chunk_file == current_file
+                and
+                chunk_index == target_index
+            ):
+
+                return chunk.copy()
+
+        return None
+
+    # ============================================================
+    # Context Expansion
+    # ============================================================
+
+    def expand_context(
+        self,
+        retrieved_chunks: List[Dict]
+    ) -> List[Dict]:
+        """
+        Add neighbouring chunks from the same file.
+        """
+
+        expanded = []
+
+        for chunk in retrieved_chunks:
+
+            previous_chunk = (
+                self.get_adjacent_chunk(
+                    chunk,
+                    -1
+                )
+            )
+
+            if previous_chunk:
+
+                expanded.append(
+                    previous_chunk
+                )
+
+            expanded.append(
+                chunk
+            )
+
+            next_chunk = (
+                self.get_adjacent_chunk(
+                    chunk,
+                    1
+                )
+            )
+
+            if next_chunk:
+
+                expanded.append(
+                    next_chunk
+                )
+
+        expanded = (
+            self.remove_duplicates(
+                expanded
+            )
+        )
+
+        expanded.sort(
+            key=lambda item: (
+                item.get(
+                    "relative_path",
+                    item.get(
+                        "path",
+                        ""
+                    )
+                ),
+                item.get(
+                    "start_line",
+                    0
+                ),
+            )
+        )
+
+        return expanded
+
+    # ============================================================
+    # Semantic Retrieval
+    # ============================================================
+
+    def retrieve(
+        self,
+        query: str,
+        top_k: int = 5,
+    ) -> List[Dict]:
+        """
+        Advanced semantic retrieval.
+
+        Pipeline:
+
+            Query
+              ↓
+            Intent Detection
+              ↓
+            Embedding
+              ↓
+            FAISS Search
+              ↓
+            Similarity Filtering
+              ↓
+            Context Expansion
+              ↓
+            Duplicate Removal
+              ↓
+            Ranking
+              ↓
+            Final Results
+        """
+
+        if not query or not query.strip():
+
+            raise ValueError(
+                "Retrieval query cannot be empty."
+            )
+
+        total_chunks = (
+            self.vector_store.size()
+        )
+
+        if total_chunks == 0:
+
+            print(
+                "Vector store is empty."
+            )
+
+            return []
+
+        # --------------------------------------------------------
+        # Query type
+        # --------------------------------------------------------
+
+        query_type = (
+            self.detect_query_type(
+                query
+            )
+        )
+
+        print(
+            f"\nQuery Type: {query_type}"
+        )
+
+        # --------------------------------------------------------
+        # Query embedding
+        # --------------------------------------------------------
+
+        query_embedding = (
+            self.embedder.model.encode(
+                query,
+                convert_to_numpy=True,
+                normalize_embeddings=True,
+            )
+        )
+
+        # --------------------------------------------------------
+        # Search more candidates than required
+        # --------------------------------------------------------
+
+        search_size = min(
+            max(
+                top_k * 3,
+                10
+            ),
+            total_chunks
+        )
+
+        print(
+            "Using semantic retrieval..."
+        )
+
+        retrieved = (
+            self.vector_store.search(
+                query_embedding,
+                top_k=search_size
+            )
+        )
+
+        # --------------------------------------------------------
+        # Similarity filter
+        # --------------------------------------------------------
+
+        retrieved = (
+            self.filter_by_similarity(
+                retrieved
+            )
+        )
+
+        if not retrieved:
+
+            print(
+                "No chunks passed similarity filter."
+            )
+
+            return []
+
+        # --------------------------------------------------------
+        # Context expansion
+        # --------------------------------------------------------
+
+        print(
+            "Expanding neighbouring chunks..."
+        )
+
+        expanded = (
+            self.expand_context(
+                retrieved
+            )
+        )
+
+        # --------------------------------------------------------
+        # Remove duplicates
+        # --------------------------------------------------------
+
+        expanded = (
+            self.remove_duplicates(
+                expanded
+            )
+        )
+
+        # --------------------------------------------------------
+        # Ranking
+        # --------------------------------------------------------
+
+        if query_type in (
+            "bug",
+            "security",
+            "performance",
+        ):
+
+            expanded.sort(
+                key=lambda chunk: (
+                    chunk.get(
+                        "distance",
+                        999
+                    ),
+                    chunk.get(
+                        "start_line",
+                        0
+                    ),
+                )
+            )
+
+        else:
+
+            expanded.sort(
+                key=lambda chunk: (
+                    chunk.get(
+                        "relative_path",
+                        chunk.get(
+                            "path",
+                            ""
+                        )
+                    ),
+                    chunk.get(
+                        "start_line",
+                        0
+                    ),
+                )
+            )
+
+        # --------------------------------------------------------
+        # Final limit
+        # --------------------------------------------------------
+
+        final_chunks = expanded[
+            :top_k
+        ]
+
+        print(
+            f"\nRetrieved "
+            f"{len(final_chunks)} chunks."
+        )
+
+        for i, chunk in enumerate(
+            final_chunks,
+            start=1
+        ):
+
+            print()
+
+            print(
+                f"Retrieved Chunk {i}"
+            )
+
+            print(
+                f"File: "
+                f"{chunk.get('name', 'Unknown')}"
+            )
+
+            print(
+                f"Lines: "
+                f"{chunk.get('start_line', '?')} - "
+                f"{chunk.get('end_line', '?')}"
+            )
+
+            print(
+                f"Distance: "
+                f"{chunk.get('distance', 'Expanded')}"
+            )
+
+        return final_chunks
+
+    # ============================================================
+    # Project-Wide Retrieval
+    # ============================================================
+
+    def retrieve_project_wide(
+        self,
+        query: str = "",
+        max_chunks: int = 20,
+        chunks_per_file: int = 2,
+    ) -> List[Dict]:
+        """
+        Retrieve representative chunks from EVERY indexed file.
+
+        This is intentionally NOT semantic filtering.
+
+        For a complete project review, every file should have
+        an opportunity to reach the LLM.
+        """
+
+        total_chunks = (
+            self.vector_store.size()
+        )
+
+        if total_chunks == 0:
+
+            print(
+                "Vector store is empty."
+            )
+
+            return []
+
+        # --------------------------------------------------------
+        # Group by file
+        # --------------------------------------------------------
+
+        chunks_by_file: Dict[
+            str,
+            List[Dict]
+        ] = {}
+
+        for chunk in (
+            self.vector_store.metadata
+        ):
+
+            file_path = (
+                chunk.get(
+                    "relative_path"
+                )
+                or chunk.get(
+                    "path"
+                )
+                or chunk.get(
+                    "name"
+                )
+                or ""
+            )
+
+            if file_path not in (
+                chunks_by_file
+            ):
+
+                chunks_by_file[
+                    file_path
+                ] = []
+
+            chunks_by_file[
+                file_path
+            ].append(
+                chunk
+            )
+
+        # --------------------------------------------------------
+        # Sort chunks in each file
+        # --------------------------------------------------------
+
+        for file_path in (
+            chunks_by_file
+        ):
+
+            chunks_by_file[
+                file_path
+            ].sort(
+                key=lambda chunk: (
+                    chunk.get(
+                        "start_line",
+                        0
+                    ),
+                    chunk.get(
+                        "end_line",
+                        0
+                    ),
+                )
+            )
+
+        # --------------------------------------------------------
+        # Select chunks
+        # --------------------------------------------------------
+
+        selected_chunks = []
+
+        sorted_files = sorted(
+            chunks_by_file.keys()
+        )
+
+        for file_path in sorted_files:
+
+            file_chunks = (
+                chunks_by_file[
+                    file_path
+                ]
+            )
+
+            selected_chunks.extend(
+                file_chunks[
+                    :chunks_per_file
+                ]
+            )
+
+            if len(
+                selected_chunks
+            ) >= max_chunks:
+
+                break
+
+        # --------------------------------------------------------
+        # Remove duplicates
+        # --------------------------------------------------------
+
+        selected_chunks = (
+            self.remove_duplicates(
+                selected_chunks
+            )
+        )
+
+        # --------------------------------------------------------
+        # Final limit
+        # --------------------------------------------------------
+
+        final_chunks = (
+            selected_chunks[
+                :max_chunks
+            ]
+        )
+
+        # --------------------------------------------------------
+        # Sort final result
+        # --------------------------------------------------------
+
+        final_chunks.sort(
+            key=lambda chunk: (
+                chunk.get(
+                    "relative_path",
+                    chunk.get(
+                        "path",
+                        ""
+                    )
+                ),
+                chunk.get(
+                    "start_line",
+                    0
+                ),
+            )
+        )
+
+        # --------------------------------------------------------
+        # Statistics
+        # --------------------------------------------------------
+
+        represented_files = set()
+
+        for chunk in final_chunks:
+
+            file_path = (
+                chunk.get(
+                    "relative_path"
+                )
+                or chunk.get(
+                    "path"
+                )
+                or chunk.get(
+                    "name"
+                )
+                or ""
+            )
+
+            represented_files.add(
+                file_path
+            )
+
+        print(
+            f"\nProject-wide retrieval: "
+            f"{len(final_chunks)} chunks."
+        )
+
+        print(
+            "Files represented:",
+            len(represented_files)
+        )
+
+        # --------------------------------------------------------
+        # Debug output
+        # --------------------------------------------------------
+
+        for i, chunk in enumerate(
+            final_chunks,
+            start=1
+        ):
+
+            print()
+
+            print(
+                f"Project Chunk {i}"
+            )
+
+            print(
+                "File:",
+                chunk.get(
+                    "name",
+                    "Unknown"
+                )
+            )
+
+            print(
+                "Path:",
+                chunk.get(
+                    "path",
+                    chunk.get(
+                        "relative_path",
+                        "Unknown"
+                    )
+                )
+            )
+
+            print(
+                "Language:",
+                chunk.get(
+                    "language",
+                    "Unknown"
+                )
+            )
+
+            print(
+                "Lines:",
+                f"{chunk.get('start_line', '?')} - "
+                f"{chunk.get('end_line', '?')}"
+            )
+
+        return final_chunks
+===== RAG CHUNKER =====
+# backend/rag/chunker.py
+
+from typing import List, Dict
+
+
+class CodeChunker:
+
+    def __init__(
+        self,
+        chunk_size: int = 100,
+        overlap: int = 20
+    ):
+        """
+        chunk_size:
+            Maximum number of lines in each chunk.
+
+        overlap:
+            Number of lines shared between consecutive chunks.
+        """
+
+        if chunk_size <= 0:
+            raise ValueError(
+                "chunk_size must be greater than 0."
+            )
+
+        if overlap < 0:
+            raise ValueError(
+                "overlap cannot be negative."
+            )
+
+        if overlap >= chunk_size:
+            raise ValueError(
+                "overlap must be smaller than chunk_size."
+            )
+
+        self.chunk_size = chunk_size
+        self.overlap = overlap
+
+    # =====================================================
+    # Add Source Line Numbers
+    # =====================================================
+
+    def _add_line_numbers(
+        self,
+        lines: List[str],
+        start_line: int
+    ) -> str:
+        """
+        Adds original source line numbers.
+        """
+
+        numbered_lines = []
+
+        for offset, line in enumerate(lines):
+
+            actual_line_number = start_line + offset
+
+            numbered_lines.append(
+                f"{actual_line_number:>5} | {line}"
+            )
+
+        return "\n".join(numbered_lines)
+
+    # =====================================================
+    # Chunk Documents
+    # =====================================================
+
+    def chunk_documents(
+        self,
+        documents: List[Dict]
+    ) -> List[Dict]:
+
+        chunks = []
+
+        chunk_id = 1
+
+        for doc in documents:
+
+            # ------------------------------------------
+            # Track chunk order within this file
+            # ------------------------------------------
+
+            file_chunk_index = 0
+
+            content = doc.get(
+                "content",
+                ""
+            )
+
+            lines = content.splitlines()
+
+            if not lines:
+                continue
+
+            start = 0
+
+            while start < len(lines):
+
+                end = min(
+                    start + self.chunk_size,
+                    len(lines)
+                )
+
+                chunk_lines = lines[start:end]
+
+                start_line = start + 1
+                end_line = end
+
+                # ------------------------------------------
+                # Plain content
+                # ------------------------------------------
+
+                chunk_text = "\n".join(
+                    chunk_lines
+                )
+
+                # ------------------------------------------
+                # Numbered content
+                # ------------------------------------------
+
+                numbered_text = (
+                    self._add_line_numbers(
+                        chunk_lines,
+                        start_line
+                    )
+                )
+
+                # ------------------------------------------
+                # Create Chunk
+                # ------------------------------------------
+
+                chunk = {
+
+                    # Global chunk id
+                    "chunk_id": chunk_id,
+
+                    # Position inside this file
+                    "file_chunk_index": file_chunk_index,
+
+                    "path": doc.get(
+                        "path",
+                        "Unknown"
+                    ),
+
+                    "relative_path": doc.get(
+                        "relative_path",
+                        doc.get(
+                            "path",
+                            "Unknown"
+                        )
+                    ),
+
+                    "name": doc.get(
+                        "name",
+                        "Unknown"
+                    ),
+
+                    "extension": doc.get(
+                        "extension",
+                        ""
+                    ),
+
+                    "language": doc.get(
+                        "language",
+                        "Unknown"
+                    ),
+
+                    "start_line": start_line,
+
+                    "end_line": end_line,
+
+                    # Plain code (used for embeddings)
+                    "content": chunk_text,
+
+                    # Line-numbered code (used by LLM)
+                    "numbered_content": numbered_text,
+                }
+
+                chunks.append(chunk)
+
+                chunk_id += 1
+                file_chunk_index += 1
+
+                # Last chunk reached
+                if end >= len(lines):
+                    break
+
+                # Move forward with overlap
+                start += (
+                    self.chunk_size -
+                    self.overlap
+                )
+
+        return chunks
+
+
+# ============================================================
+# Local Test
+# ============================================================
+
+if __name__ == "__main__":
+
+    sample_documents = [
+        {
+            "path": "src/Main.java",
+            "relative_path": "src/Main.java",
+            "name": "Main.java",
+            "extension": ".java",
+            "language": "Java",
+            "content": """public class Main {
+
+    public static void main(String[] args) {
+
+        int[] arr = {10, 20, 30};
+
+        for (int i = 0; i < arr.length; i++) {
+            System.out.println(arr[i]);
+        }
+    }
+}"""
+        }
+    ]
+
+    chunker = CodeChunker(
+        chunk_size=5,
+        overlap=1
+    )
+
+    chunks = chunker.chunk_documents(
+        sample_documents
+    )
+
+    print(f"\nTotal Chunks: {len(chunks)}\n")
+
+    for chunk in chunks:
+
+        print("=" * 80)
+
+        print(
+            f"Chunk ID         : {chunk['chunk_id']}"
+        )
+
+        print(
+            f"File Chunk Index : {chunk['file_chunk_index']}"
+        )
+
+        print(
+            f"File             : {chunk['name']}"
+        )
+
+        print(
+            f"Language         : {chunk['language']}"
+        )
+
+        print(
+            f"Lines            : {chunk['start_line']} - {chunk['end_line']}"
+        )
+
+        print("\nPlain Content:\n")
+
+        print(chunk["content"])
+
+        print("\nNumbered Content:\n")
+
+        print(chunk["numbered_content"])
+
+        print()
+===== PROMPT BUILDER =====
 from typing import List, Dict, Optional, Set
 import json
 
@@ -764,15 +3240,8 @@ Files:
                     "Unknown"
                 )
 
-                segment_content = segment.get(
-                    "content",
-                    ""
-                )
-                if len(segment_content) > 3500:
-                    segment_content = (
-                    segment_content[:3500]
-                    + "\n... (truncated for length)"
-                )
+                if len(content) > 3500:
+                    content = content[:3500] + "\n... (truncated for length)"
 
                 context_parts.append(
                     f"""
@@ -786,7 +3255,7 @@ Extension: {extension}
 Lines: {start_line}-{end_line}
 
 SOURCE CODE:
-{segment_content}
+{content}
 """.strip()
                 )
 
@@ -803,8 +3272,9 @@ SOURCE CODE:
             context_parts
         )
 
-        if len(result) > 30000:
-            result = result[:30000] + "\n... (context truncated for length)"
+        if len(result) > 10000:
+            result = result[:10000] + "\n... (context truncated for length)"
+
         return result
 
     # ============================================================
@@ -3052,3 +5522,482 @@ Return ONLY valid JSON.
 """.strip()
 
         return prompt
+===== REVIEW SERVICE =====
+import json
+from typing import TYPE_CHECKING
+
+from fastapi import HTTPException
+from pydantic import ValidationError
+
+from models.review_models import StructuredReview
+
+
+if TYPE_CHECKING:
+    from rag.pipeline import RAGPipeline
+    from groq import Groq
+
+
+class ReviewService:
+    """
+    Handles all AI review-related business logic.
+
+    FastAPI routes should only:
+        1. Receive the request
+        2. Call this service
+        3. Return the response
+    """
+
+    def __init__(
+        self,
+        rag_pipeline: "RAGPipeline",
+        groq_client: "Groq"
+    ):
+        self.rag_pipeline = rag_pipeline
+        self.client = groq_client
+
+    # ============================================================
+    # Utility - Clean LLM JSON
+    # ============================================================
+
+    @staticmethod
+    def clean_json_response(
+        content: str
+    ) -> str:
+        """
+        Removes Markdown code fences if the LLM
+        accidentally returns them.
+        """
+
+        content = content.strip()
+
+        if content.startswith("```json"):
+            content = content[7:]
+
+        elif content.startswith("```"):
+            content = content[3:]
+
+        if content.endswith("```"):
+            content = content[:-3]
+
+        return content.strip()
+
+    # ============================================================
+    # Utility - Validate Findings
+    # ============================================================
+
+    @staticmethod
+    def validate_findings(
+        review: StructuredReview
+    ) -> StructuredReview:
+        """
+        Performs additional backend verification.
+
+        The LLM is not trusted blindly.
+
+        Findings without:
+            - evidence
+            - file
+
+        are removed.
+        """
+
+        # --------------------------------------------------------
+        # Validate Bugs
+        # --------------------------------------------------------
+
+        verified_bugs = []
+
+        for bug in review.bugs:
+
+            if not bug.evidence.strip():
+
+                print(
+                    "Rejected bug without evidence:",
+                    bug.title
+                )
+
+                continue
+
+            if not bug.file.strip():
+
+                print(
+                    "Rejected bug without file:",
+                    bug.title
+                )
+
+                continue
+
+            verified_bugs.append(
+                bug
+            )
+
+        review.bugs = verified_bugs
+
+        # --------------------------------------------------------
+        # Validate Errors
+        # --------------------------------------------------------
+
+        verified_errors = []
+
+        for error in review.errors:
+
+            if not error.evidence.strip():
+
+                print(
+                    "Rejected error without evidence:",
+                    error.title
+                )
+
+                continue
+
+            if not error.file.strip():
+
+                print(
+                    "Rejected error without file:",
+                    error.title
+                )
+
+                continue
+
+            verified_errors.append(
+                error
+            )
+
+        review.errors = verified_errors
+
+        return review
+
+    # ============================================================
+    # Generate Review
+    # ============================================================
+
+    def generate_review(
+        self,
+        question: str
+    ) -> StructuredReview:
+
+        # --------------------------------------------------------
+        # Validate Question
+        # --------------------------------------------------------
+
+        question = question.strip()
+
+        if not question:
+
+            raise HTTPException(
+                status_code=400,
+                detail="Review question cannot be empty."
+            )
+
+        # --------------------------------------------------------
+        # Check Vector Database
+        # --------------------------------------------------------
+
+        if not self.rag_pipeline.vector_database_exists():
+
+            raise HTTPException(
+                status_code=400,
+                detail="Please upload a project first."
+            )
+
+        try:
+
+            # ====================================================
+            # Detect Review Intent
+            # ====================================================
+
+            detected_modes = (
+                self.rag_pipeline
+                .prompt_builder
+                .detect_review_modes(
+                    question
+                )
+            )
+
+            print(
+                "\nDetected Review Types:",
+                detected_modes
+            )
+
+            # ====================================================
+            # Generate RAG Prompt
+            # ====================================================
+
+            print(
+                "\nGenerating RAG prompt..."
+            )
+
+            prompt = (
+                self.rag_pipeline
+                .generate_prompt(
+                    question
+                )
+            )
+
+            # ====================================================
+            # Prompt Size
+            # ====================================================
+
+            prompt_characters = len(
+                prompt
+            )
+
+            estimated_prompt_tokens = max(
+                1,
+                prompt_characters // 4
+            )
+
+            print(
+                "Prompt Characters:",
+                prompt_characters
+            )
+
+            print(
+                "Estimated Prompt Tokens:",
+                estimated_prompt_tokens
+            )
+
+            if estimated_prompt_tokens > 5200:
+
+                print(
+                    "WARNING: Prompt is becoming too large."
+                )
+
+            # ====================================================
+            # Groq Request
+            # ====================================================
+
+            print(
+                "\nSending request to Groq..."
+            )
+
+            response = (
+                self.client
+                .chat
+                .completions
+                .create(
+
+                    model="llama-3.1-8b-instant",
+
+                    temperature=0.1,
+
+                    response_format={
+                        "type": "json_object"
+                    },
+
+                    messages=[
+                        {
+                            "role": "system",
+                            "content": (
+                                "You are an expert senior "
+                                "software engineer performing "
+                                "grounded code analysis. "
+                                "Use only the supplied project "
+                                "metadata and retrieved source "
+                                "code. "
+                                "Do not invent files, lines, "
+                                "bugs, or evidence. "
+                                "Return exactly one valid JSON "
+                                "object and no Markdown."
+                            )
+                        },
+                        {
+                            "role": "user",
+                            "content": prompt
+                        }
+                    ]
+                )
+            )
+
+            # ====================================================
+            # Extract Model Response
+            # ====================================================
+
+            raw_answer = (
+                response
+                .choices[0]
+                .message
+                .content
+            )
+
+            if not raw_answer:
+
+                raise HTTPException(
+                    status_code=502,
+                    detail=(
+                        "AI model returned "
+                        "an empty response."
+                    )
+                )
+
+            print(
+                "\n========== RAW AI RESPONSE =========="
+            )
+
+            print(
+                raw_answer
+            )
+
+            print(
+                "====================================="
+            )
+
+            # ====================================================
+            # Clean JSON
+            # ====================================================
+
+            cleaned_answer = (
+                self.clean_json_response(
+                    raw_answer
+                )
+            )
+
+            # ====================================================
+            # Parse JSON
+            # ====================================================
+
+            try:
+
+                review_json = json.loads(
+                    cleaned_answer
+                )
+
+            except json.JSONDecodeError as e:
+
+                print(
+                    "\n========== JSON PARSE ERROR =========="
+                )
+
+                print(
+                    repr(e)
+                )
+
+                print(
+                    "\nCleaned Response:"
+                )
+
+                print(
+                    cleaned_answer
+                )
+
+                raise HTTPException(
+                    status_code=502,
+                    detail=(
+                        "AI model returned "
+                        "invalid JSON."
+                    )
+                )
+
+            # ====================================================
+            # Ensure Object
+            # ====================================================
+
+            if not isinstance(
+                review_json,
+                dict
+            ):
+
+                raise HTTPException(
+                    status_code=502,
+                    detail=(
+                        "AI model returned an invalid "
+                        "review object."
+                    )
+                )
+
+            # ====================================================
+            # Add Detected Review Types
+            # ====================================================
+
+            review_json.setdefault(
+                "review_types",
+                list(detected_modes)
+            )
+
+            review_json.setdefault(
+                "question",
+                question
+            )
+
+            # ====================================================
+            # Validate Structured Review
+            # ====================================================
+
+            try:
+
+                review = (
+                    StructuredReview
+                    .model_validate(
+                        review_json
+                    )
+                )
+
+            except ValidationError as e:
+
+                print(
+                    "\n========== REVIEW VALIDATION ERROR =========="
+                )
+
+                print(
+                    e
+                )
+
+                print(
+                    "\n========== AI REVIEW JSON =========="
+                )
+
+                print(
+                    json.dumps(
+                        review_json,
+                        indent=2,
+                        ensure_ascii=False
+                    )
+                )
+
+                raise HTTPException(
+                    status_code=502,
+                    detail=(
+                        "The AI review did not match "
+                        "the required response structure."
+                    )
+                )
+
+            # ====================================================
+            # Backend Finding Validation
+            # ====================================================
+
+            review = (
+                self.validate_findings(
+                    review
+                )
+            )
+
+            # ====================================================
+            # Return Review
+            # ====================================================
+
+            print(
+                "\nAI review generated successfully."
+            )
+
+            return review
+
+        except HTTPException:
+            raise
+
+        except Exception as e:
+
+            print(
+                "\n========== REVIEW ERROR =========="
+            )
+
+            print(
+                repr(e)
+            )
+
+            raise HTTPException(
+                status_code=500,
+                detail=(
+                    "Failed to generate AI code review."
+                )
+            )

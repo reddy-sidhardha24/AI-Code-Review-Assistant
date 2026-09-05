@@ -1060,6 +1060,10 @@ def normalize_review(
                     issue.confidence
                 )
 
+    # --------------------------------------------------------
+    # Use finding confidence when findings contain confidence
+    # --------------------------------------------------------
+
     if confidences:
 
         review.confidence = round(
@@ -1071,6 +1075,10 @@ def normalize_review(
                 confidences
             )
         )
+
+    # --------------------------------------------------------
+    # Findings exist but individual confidence was not supplied
+    # --------------------------------------------------------
 
     elif (
         review.bugs
@@ -1095,10 +1103,16 @@ def normalize_review(
 
         review.confidence = 80
 
+    # --------------------------------------------------------
+    # Clean review
+    # --------------------------------------------------------
+    # No findings does NOT mean zero confidence.
+    # It means the model found no issues in the analyzed source.
+    # --------------------------------------------------------
+
     else:
 
-        review.confidence = 0
-
+        review.confidence = 95
     # ========================================================
     # QUESTION
     # ========================================================

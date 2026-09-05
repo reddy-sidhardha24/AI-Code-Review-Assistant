@@ -65,30 +65,50 @@ class RAGPipeline:
     # ============================================================
 
     PROJECT_WIDE_PHRASES = (
+        "comprehensive review",
+        "comprehensive code review",
+        "comprehensive analysis",
+        "comprehensive security and code review",
+
         "complete analysis",
         "complete review",
+        "complete code review",
+        "complete project review",
+
         "full analysis",
         "full review",
+        "full code review",
+
         "entire project",
         "whole project",
         "complete project",
         "entire codebase",
         "whole codebase",
+
         "all files",
         "every file",
         "all bugs",
         "all errors",
         "find all bugs",
         "find all errors",
+
         "analyze project",
         "analyse project",
         "analyze the project",
         "analyse the project",
+
         "review project",
         "review the project",
+
         "analyze everything",
         "analyse everything",
         "review everything",
+
+        "analyze the entire file",
+        "analyse the entire file",
+        "review the entire file",
+        "complete file review",
+        "full file review",
     )
 
     # ============================================================
@@ -576,29 +596,79 @@ class RAGPipeline:
         self,
         query: str,
         targeted_top_k: int = 3,
-        project_max_chunks: int = 8,
-        chunks_per_file: int = 2
+        project_max_chunks: int = 100,
+        chunks_per_file: int = 10
     ) -> Dict:
 
         if self.retriever is None:
-
             self._create_retriever()
 
         if self.retriever is None:
-
             raise RuntimeError(
                 "Retriever is not available."
             )
 
-        query_type = (
-            self.classify_query(
-                query
-            )
-        )
+        query_type = self.classify_query(query)
 
         print(
             f"\nQuery Type: {query_type}"
         )
+
+        # ========================================================
+        # COMPLETE SOURCE MODE
+        # ========================================================
+        # For a small single-file project, send every chunk
+        # to the LLM instead of performing semantic retrieval.
+        # This prevents false findings caused by missing context.
+        # ========================================================
+
+        total_chunks = self.vector_store.size()
+        total_files = self.vector_store.file_count()
+
+        print(
+            f"Indexed Files: {total_files}"
+        )
+
+        print(
+            f"Indexed Chunks: {total_chunks}"
+        )
+
+        if total_files == 1 and total_chunks <= 10:
+
+            print(
+                "\nUsing COMPLETE SOURCE retrieval."
+            )
+
+            chunks = [
+                chunk.copy()
+                for chunk in self.vector_store.metadata
+            ]
+
+            chunks.sort(
+                key=lambda chunk: (
+                    chunk.get(
+                        "relative_path",
+                        chunk.get(
+                            "path",
+                            ""
+                        )
+                    ),
+                    chunk.get(
+                        "start_line",
+                        0
+                    )
+                )
+            )
+
+            print(
+                f"Complete source contains "
+                f"{len(chunks)} chunks."
+            )
+
+            return {
+                "query_type": "complete_source",
+                "chunks": chunks
+            }
 
         # ========================================================
         # PROJECT-WIDE
@@ -640,7 +710,46 @@ class RAGPipeline:
             "query_type": query_type,
             "chunks": chunks
         }
+        # ========================================================
+        # PROJECT-WIDE
+        # ========================================================
 
+        if query_type == "project_wide":
+
+            print(
+                "Using broad project retrieval..."
+            )
+
+            chunks = (
+                self.retriever
+                .retrieve_project_wide(
+                    query=query,
+                    max_chunks=project_max_chunks,
+                    chunks_per_file=chunks_per_file
+                )
+            )
+
+        # ========================================================
+        # TARGETED
+        # ========================================================
+
+        else:
+
+            print(
+                "Using targeted semantic retrieval..."
+            )
+
+            chunks = (
+                self.retriever.retrieve(
+                    query=query,
+                    top_k=targeted_top_k
+                )
+            )
+
+        return {
+            "query_type": query_type,
+            "chunks": chunks
+        }
     # ============================================================
     # GENERATE PROMPT
     # ============================================================
