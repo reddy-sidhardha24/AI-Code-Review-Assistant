@@ -1,4 +1,7 @@
-def find_duplicates(numbers):
+from data import get_numbers
+
+def find_duplicates():
+    numbers = get_numbers()
     duplicates = []
 
     for i in range(len(numbers)):
@@ -8,13 +11,3 @@ def find_duplicates(numbers):
                     duplicates.append(numbers[i])
 
     return duplicates
-
-def main():
-    numbers = list(range(10000))
-    numbers.extend(range(5000))
-
-    duplicates = find_duplicates(numbers)
-    print(duplicates)
-
-if __name__ == "__main__":
-    main()

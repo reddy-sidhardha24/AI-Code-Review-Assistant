@@ -3073,6 +3073,23 @@ OUTPUT:
 Return ONLY valid JSON matching the application's required
 response structure.
 
+FINAL JSON CHECK:
+Before returning the response, verify that:
+
+1. The output is valid JSON.
+2. Every required top-level field is present.
+3. No required top-level field is missing.
+4. key_methods is a flat array of strings.
+5. key_classes is a flat array of strings.
+6. libraries is a flat array of strings.
+7. user_requirements is a flat array of strings.
+8. review_types is a flat array of strings.
+9. expected_output is present even when null.
+10. score is present even when null.
+11. confidence is present with an integer or null.
+12. final_verdict is present and is a string.
+13. No additional top-level fields are added.
+
 Allowed top-level fields ONLY:
 project, question, user_requirements, review_types,
 answer_summary, files_analyzed, key_methods, key_classes,
@@ -3114,12 +3131,155 @@ final_verdict.
 
 Use [] for empty arrays.
 Use null for nullable fields.
-Do not add fields outside the required structure.
-score must be null unless explicitly requested.
-final_verdict must be consistent with the findings.
+
+Do NOT add fields outside the required structure.
+
+DATA TYPE RULES:
+- project: object
+- question: string
+- user_requirements: array of strings
+- review_types: array of strings
+- answer_summary: string
+- files_analyzed: array of objects
+- key_methods: array of strings
+- key_classes: array of strings
+- libraries: array of strings
+- bugs: array of objects
+- errors: array of objects
+- performance: object or null
+- security: object or null
+- code_quality: object or null
+- corrected_code: array of objects
+- expected_output: string or null
+- score: number or null
+- confidence: integer or null
+- final_verdict: string
+
+IMPORTANT ARRAY RULE:
+key_methods, key_classes, libraries, user_requirements,
+and review_types MUST ALWAYS be flat arrays.
+
+Correct:
+"key_methods": ["main", "get_profile", "get_user"]
+
+Incorrect:
+"key_methods": [["main"], ["get_profile"], ["get_user"]]
+
+Correct:
+"key_classes": ["User", "Profile"]
+
+Incorrect:
+"key_classes": [["User"], ["Profile"]]
+
+Correct:
+"libraries": ["os", "requests", "sqlite3"]
+
+Incorrect:
+"libraries": [["os"], ["requests"], ["sqlite3"]]
+
+Never place arrays inside these arrays.
+Each item in key_methods, key_classes, libraries,
+user_requirements, and review_types must be a single string.
+
+FILES ANALYZED:
+Each files_analyzed item must contain the file information
+required by the application schema.
+Do not invent files.
+
+FINDINGS:
+bugs and errors must contain objects matching their required
+schema.
+Do not return strings instead of finding objects.
+
+CORRECTED CODE:
+corrected_code must be an array of objects.
+Each object must contain:
+file_name and code.
+
+EMPTY RESULTS:
+Use [] when there are no items.
+Use null only for nullable fields.
+
+REQUIRED FIELD RULE:
+Every required top-level field MUST be present in the JSON.
+
+The following fields MUST ALWAYS be explicitly included:
+
+project
+question
+user_requirements
+review_types
+answer_summary
+files_analyzed
+key_methods
+key_classes
+libraries
+bugs
+errors
+performance
+security
+code_quality
+corrected_code
+expected_output
+score
+confidence
+final_verdict
+
+Never omit any of these fields.
+
+NULLABLE TOP-LEVEL FIELDS:
+If there is no value, explicitly output:
+
+"expected_output": null
+"score": null
+"confidence": null
+
+Do NOT omit these fields.
+
+IMPORTANT JSON SYNTAX:
+Use a colon between every JSON field name and its value.
+
+Correct:
+"expected_output": null
+"score": null
+"confidence": 90
+"final_verdict": "A confirmed bug was found."
+
+Incorrect:
+"expected_output", null
+"score", null
+"confidence", 90
+"final_verdict", "A confirmed bug was found."
+
+Do not output malformed JSON punctuation.
+
+CONFIDENCE:
+confidence must be an integer from 0 to 100.
+If confidence is available, include the integer.
+Otherwise use:
+"confidence": null
+
+SCORE:
+Use:
+"score": null
+unless the user explicitly requests a score.
+
+EXPECTED OUTPUT:
+Use:
+"expected_output": null
+when expected output cannot be determined from the supplied code.
+
+FINAL VERDICT:
+final_verdict MUST always be a string.
+Never set final_verdict to null.
+It must summarize the actual findings.
+
+If confirmed bugs exist, final_verdict MUST acknowledge
+the confirmed bugs.
+
 If no real issues are found, bugs/errors/security/performance
-issues should be empty and the verdict should state that no
-confirmed issues were found.
+issues should be empty and final_verdict should state that
+no confirmed issues were found.
 
 ============================================================
 PROJECT
