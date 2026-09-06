@@ -1,0 +1,9 @@
+
+===== app.py =====
+    raw_schema = model.model_json_schema()
+                response_format={
+                    "type": "json_schema",
+                    "json_schema": {
+
+===== services/review_service.py =====
+                    response_format={

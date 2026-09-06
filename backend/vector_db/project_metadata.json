@@ -1,34 +1,20 @@
 {
-    "project_name": "temp_project",
-    "total_files": 3,
-    "total_lines": 45,
+    "project_name": "pasted_code",
+    "total_files": 1,
+    "total_lines": 48,
     "languages": {
         "Python": {
-            "files": 3,
-            "lines": 45
+            "files": 1,
+            "lines": 48
         }
     },
     "files": [
-        {
-            "name": "calculator.py",
-            "path": "calculator.py",
-            "extension": ".py",
-            "language": "Python",
-            "lines": 5
-        },
         {
             "name": "main.py",
             "path": "main.py",
             "extension": ".py",
             "language": "Python",
-            "lines": 31
-        },
-        {
-            "name": "users.py",
-            "path": "users.py",
-            "extension": ".py",
-            "language": "Python",
-            "lines": 9
+            "lines": 48
         }
     ]
 }

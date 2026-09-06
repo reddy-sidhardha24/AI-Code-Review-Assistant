@@ -1,89 +1,48 @@
-import json
-
+import subprocess
 
 def get_user(user_id):
     users = {
-        1: {
-            "name": "Alice",
-            "age": 25,
-            "email": "alice@example.com",
-            "city": "Hyderabad"
-        },
-        2: {
-            "name": "Bob",
-            "age": 30,
-            "email": "bob@example.com",
-            "city": "Bangalore"
-        }
+        1: {"name": "Alice", "age": 21},
+        2: {"name": "Bob", "age": 25}
     }
-
-    return users.get(user_id)
-
+    return users[user_id]
 
 def calculate_average(numbers):
-    if not numbers:
-        return 0
-
-    total = sum(numbers)
-    return total / len(numbers)
-
+    return sum(numbers) / len(numbers)
 
 def process_user(user_id):
     user = get_user(user_id)
 
-    if user is None:
-        return None
+    print("Name:", user["name"])
+    print("Email:", user["email"])
 
-    average = calculate_average([10, 20, 30])
+    scores = []
+    average = calculate_average(scores)
 
-    result = {
+    return {
         "name": user["name"],
-        "age": user["age"],
-        "email": user["email"],
-        "city": user["city"],
         "average": average
     }
 
-    return result
-
-
-def save_result(result, filename):
-    with open(filename, "w") as file:
-        json.dump(result, file)
-
-
-def load_result(filename):
-    with open(filename, "r") as file:
-        return json.load(file)
-
-
-def generate_report(user_id):
-    user = process_user(user_id)
-
-    if user is None:
-        print("User not found")
-        return
-
-    print("User:", user["name"])
-    print("Age:", user["age"])
-    print("Average:", user["average"])
-
+def run_command(command):
+    result = subprocess.run(
+        command,
+        shell=True,
+        capture_output=True,
+        text=True
+    )
+    return result.stdout
 
 def main():
-    try:
-        user_id = int(input("Enter user ID: "))
-    except ValueError:
-        print("Invalid user ID")
-        return
+    user_id = int(input("Enter user ID: "))
 
-    result = process_user(user_id)
+    user = process_user(user_id)
 
-    if result:
-        save_result(result, "result.json")
-        generate_report(user_id)
-    else:
-        print("Unable to process user")
+    command = input("Enter command: ")
+    output = run_command(command)
 
+    print(user)
+    print(output)
 
 if __name__ == "__main__":
     main()

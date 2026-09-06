@@ -107,9 +107,9 @@ class BugFinding(BaseModel):
 
     file: str
 
-    line: Optional[int] = None
+    line: Optional[int]
 
-    line_range: Optional[str] = None
+    line_range: Optional[str]
 
     evidence: str
 
@@ -165,17 +165,17 @@ class PerformanceIssue(BaseModel):
 
     description: str
 
-    file: Optional[str] = None
+    file: Optional[str]
 
-    line: Optional[int] = None
+    line: Optional[int]
 
-    line_range: Optional[str] = None
+    line_range: Optional[str]
 
-    evidence: Optional[str] = None
+    evidence: Optional[str]
 
-    impact: Optional[str] = None
+    impact: Optional[str]
 
-    suggestion: Optional[str] = None
+    suggestion: Optional[str]
 
     confidence: int = Field(
         ge=0,
@@ -210,17 +210,17 @@ class SecurityFinding(BaseModel):
 
     description: str
 
-    file: Optional[str] = None
+    file: Optional[str]
 
-    line: Optional[int] = None
+    line: Optional[int]
 
-    line_range: Optional[str] = None
+    line_range: Optional[str]
 
-    evidence: Optional[str] = None
+    evidence: Optional[str]
 
-    impact: Optional[str] = None
+    impact: Optional[str]
 
-    suggestion: Optional[str] = None
+    suggestion: Optional[str]
 
     severity: Optional[
         Literal[
@@ -229,7 +229,7 @@ class SecurityFinding(BaseModel):
             "medium",
             "low"
         ]
-    ] = None
+    ]
 
     confidence: Optional[int] = Field(
         ge=0,
@@ -265,20 +265,19 @@ class CodeQualityFinding(BaseModel):
 
     description: str
 
-    file: Optional[str] = None
+    file: Optional[str]
 
-    line: Optional[int] = None
+    line: Optional[int]
 
-    line_range: Optional[str] = None
+    line_range: Optional[str]
 
-    evidence: Optional[str] = None
+    evidence: Optional[str]
 
-    impact: Optional[str] = None
+    impact: Optional[str]
 
-    suggestion: Optional[str] = None
+    suggestion: Optional[str]
 
     confidence: Optional[int] = Field(
-        default=None,
         ge=0,
         le=100
     )

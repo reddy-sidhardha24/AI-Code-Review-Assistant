@@ -2927,7 +2927,7 @@ field from this structure.
 
 Return ONLY the JSON object.
 """.strip()
-
+        
     # ============================================================
     # FINAL PROMPT
     # ============================================================
@@ -2950,12 +2950,10 @@ Return ONLY the JSON object.
         # DETECT REVIEW INTENT
         # --------------------------------------------------------
 
-        modes = self.detect_review_modes(query)
-
-        print(
-            "DETECTED REVIEW MODES:",
-            modes
+        modes = self.detect_review_modes(
+            query
         )
+        print("DETECTED REVIEW MODES:", modes)
 
         # --------------------------------------------------------
         # BUILD CONTEXT
@@ -2976,150 +2974,37 @@ Return ONLY the JSON object.
         requested_modes = ", ".join(
             sorted(modes)
         )
+        
 
         # --------------------------------------------------------
-        # COMPACT GROUNDED REVIEW PROMPT
+        # FINAL PROMPT
         # --------------------------------------------------------
+
+        task_rules = self.build_task_rules(modes)
+
+        json_schema = self.build_json_schema(
+            query,
+            modes
+        )
+
+        output_rules = self.build_output_rules_json(
+            modes
+        )
 
         prompt = f"""
 You are a senior software engineer performing a grounded
 AI code review using Retrieval-Augmented Generation.
 
-Analyze ONLY the project metadata and source code supplied
-below.
+Analyze ONLY the project metadata and retrieved source code
+provided below.
 
-Do not use external code, previous conversations, memory,
+Do not use previous conversations, memory, external code,
 or assumptions.
 
-GROUNDING RULES:
-1. Every finding MUST be supported by the supplied source code.
-2. Never invent files, functions, classes, variables, imports,
-   vulnerabilities, line numbers, evidence, statistics, or outputs.
-3. Inspect the complete supplied source before reporting issues.
-4. A function is NOT undefined if it is defined anywhere in
-   the supplied source.
-5. Trace function calls and data flow across all supplied files.
-6. Verify every finding against the actual source.
-7. Distinguish confirmed bugs from conditional risks and
-   code-quality suggestions.
-8. Use the smallest exact source location responsible for
-   each finding.
-9. Evidence must correspond to actual supplied source code.
-10. Do not duplicate the same issue.
+Every finding MUST be supported by the supplied source code.
 
-REVIEW:
-Requested review types: {requested_modes}
-
-Check applicable areas including:
-- Undefined variables and functions
-- Missing or incorrect imports
-- Incorrect function calls
-- Runtime exceptions
-- KeyError, IndexError, TypeError and ValueError
-- Division by zero
-- None/null handling
-- Logic and control-flow errors
-- File handling problems
-- Security vulnerabilities
-- Performance problems and complexity
-- Code quality and maintainability
-
-SEVERITY:
-Use critical, high, medium, or low.
-
-STATUS:
-Use confirmed when the supplied code proves the issue.
-Use conditional when the issue depends on a runtime condition.
-Use possible_risk only when there is a concrete but uncertain risk.
-
-LOCATION:
-Use the exact file and line responsible for the finding.
-Do not invent line numbers.
-
-PERFORMANCE:
-The performance object contains:
-time_complexity, space_complexity, issues.
-
-time_complexity and space_complexity belong to the
-performance object, NOT inside individual issues.
-
-Each performance issue contains only:
-title, description, file, line, line_range, evidence,
-impact, suggestion, confidence.
-
-If there are no performance issues, set time_complexity
-and space_complexity to null and issues to [].
-
-SECURITY:
-Each security issue must contain:
-title, description, file, line, line_range, evidence,
-impact, suggestion, severity, confidence.
-issues_found must equal the number of security issues.
-
-CODE QUALITY:
-Separate observations from suggestions.
-Do not report ordinary style preferences as bugs.
-
-CORRECTED CODE:
-Only provide corrected code when an actual fix is justified.
-Do not invent unrelated changes.
-
-CONFIDENCE:
-Return an integer from 0 to 100.
-Base confidence on how directly the supplied source supports
-the finding.
-
-OUTPUT:
-Return ONLY valid JSON matching the application's required
-response structure.
-
-Allowed top-level fields ONLY:
-project, question, user_requirements, review_types,
-answer_summary, files_analyzed, key_methods, key_classes,
-libraries, bugs, errors, performance, security,
-code_quality, corrected_code, expected_output, score,
-confidence, final_verdict.
-
-Do NOT add any other top-level fields.
-In particular, do NOT create a top-level "suggestions" field.
-
-Suggestions must be placed inside the appropriate
-code_quality, security, performance, or bug finding object
-using that object's "suggestion" or "fix" field.
-
-Use [] for empty arrays.
-Use null for nullable fields.
-score must be null unless explicitly requested.
-
-For performance:
-performance must contain:
-time_complexity, space_complexity, issues.
-
-For security:
-security must contain:
-issues_found, issues.
-
-For code quality:
-code_quality must contain:
-observations, suggestions.
-
-final_verdict must be consistent with the findings.
-
-The response must contain:
-project, question, user_requirements, review_types,
-answer_summary, files_analyzed, key_methods, key_classes,
-libraries, bugs, errors, performance, security, code_quality,
-corrected_code, expected_output, score, confidence,
-final_verdict.
-
-Use [] for empty arrays.
-Use null for nullable fields.
-Do not add fields outside the required structure.
-score must be null unless explicitly requested.
-final_verdict must be consistent with the findings.
-If no real issues are found, bugs/errors/security/performance
-issues should be empty and the verdict should state that no
-confirmed issues were found.
+Do not invent files, functions, classes, libraries,
+vulnerabilities, line numbers, statistics, or outputs.
 
 ============================================================
 PROJECT
@@ -3140,8 +3025,28 @@ USER REQUEST
 {query}
 
 ============================================================
-END SOURCE
+REVIEW TYPES
 ============================================================
+
+{requested_modes}
+
+============================================================
+TASK RULES
+============================================================
+
+{task_rules}
+
+============================================================
+JSON SCHEMA
+============================================================
+
+{json_schema}
+
+============================================================
+STRICT JSON OUTPUT RULES
+============================================================
+
+{output_rules}
 
 Return ONLY valid JSON.
 """.strip()
