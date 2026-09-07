@@ -1,1 +1,0 @@
-API_KEY = "sk_test_ABC123456789SECRET"
