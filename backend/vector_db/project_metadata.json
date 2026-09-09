@@ -1,11 +1,11 @@
 {
-    "project_name": "temp_project",
-    "total_files": 3,
-    "total_lines": 15,
+    "project_name": "pasted_code",
+    "total_files": 1,
+    "total_lines": 68,
     "languages": {
         "Python": {
-            "files": 3,
-            "lines": 15
+            "files": 1,
+            "lines": 68
         }
     },
     "files": [
@@ -14,21 +14,7 @@
             "path": "main.py",
             "extension": ".py",
             "language": "Python",
-            "lines": 8
-        },
-        {
-            "name": "service.py",
-            "path": "service.py",
-            "extension": ".py",
-            "language": "Python",
-            "lines": 5
-        },
-        {
-            "name": "utils.py",
-            "path": "utils.py",
-            "extension": ".py",
-            "language": "Python",
-            "lines": 2
+            "lines": 68
         }
     ]
 }

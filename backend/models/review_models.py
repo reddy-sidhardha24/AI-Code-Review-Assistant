@@ -98,13 +98,7 @@ class BugFinding(BaseModel):
         "possible_risk"
     ]
 
-    severity: Literal[
-        "critical",
-        "high",
-        "medium",
-        "low"
-    ]
-
+    severity: Literal["critical", "high", "medium", "low"]
     file: str
 
     line: Optional[int] = None
@@ -222,16 +216,15 @@ class SecurityFinding(BaseModel):
 
     suggestion: Optional[str] = None
 
-    severity: Optional[
-        Literal[
-            "critical",
-            "high",
-            "medium",
-            "low"
-        ]
-    ] = None
+    severity: Literal[
+        "critical",
+        "high",
+        "medium",
+        "low"
+    ] = "medium"
 
-    confidence: Optional[int] = Field(
+    confidence: int = Field(
+        default=80,
         ge=0,
         le=100
     )

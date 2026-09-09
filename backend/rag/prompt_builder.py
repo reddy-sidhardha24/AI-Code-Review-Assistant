@@ -3024,41 +3024,80 @@ Check applicable areas including:
 - Performance problems and complexity
 - Code quality and maintainability
 
-SEVERITY:
-Use critical, high, medium, or low.
 
-STATUS:
-Use confirmed when the supplied code proves the issue.
-Use conditional when the issue depends on a runtime condition.
-Use possible_risk only when there is a concrete but uncertain risk.
 
-LOCATION:
-Use the exact file and line responsible for the finding.
-Do not invent line numbers.
+CATEGORY RULES:
+
+BUGS:
+Confirmed functional or logical defects.
+
+ERRORS:
+Runtime exceptions or execution failures.
+
+ERROR SEVERITY/FIX RULE:
+Every error finding MUST contain ALL of these fields:
+type, title, file, line, line_range, evidence,
+description, impact, fix, confidence.
+
+The "fix" field is MANDATORY for every error.
+Never omit "fix".
+Never use a missing field for "fix".
+If an error has no complex fix, provide a concise concrete fix such as:
+"Add input validation before division."
+
+SECURITY:
+Security vulnerabilities MUST be reported under security.issues.
+
+The security object MUST contain only:
+issues_found, issues.
+
+Each security issue MUST contain ONLY:
+title, description, file, line, line_range, evidence,
+impact, suggestion, severity, confidence.
+
+SECURITY SEVERITY IS MANDATORY:
+Every security issue MUST include a severity field.
+severity MUST be exactly one of:
+"critical", "high", "medium", "low".
+
+Never omit severity.
+Never use null for severity.
+If a security vulnerability is confirmed, assign the most appropriate
+severity based only on the supplied source code.
+
+Do NOT include type or fix inside security issues.
+
+issues_found MUST equal the number of security issues.
 
 PERFORMANCE:
-The performance object contains:
-time_complexity, space_complexity, issues.
+Performance problems MUST be reported under performance.issues.
 
-time_complexity and space_complexity belong to the
-performance object, NOT inside individual issues.
+The performance object MUST contain only:
+time_complexity,
+space_complexity,
+issues.
 
-Each performance issue contains only:
+Each performance issue MUST contain ONLY:
 title, description, file, line, line_range, evidence,
 impact, suggestion, confidence.
 
-If there are no performance issues, set time_complexity
-and space_complexity to null and issues to [].
+Do NOT include:
+severity, type, fix, or any other fields
+inside performance issues.
 
-SECURITY:
-Each security issue must contain:
-title, description, file, line, line_range, evidence,
-impact, suggestion, severity, confidence.
-issues_found must equal the number of security issues.
+If there are no performance issues:
+time_complexity = null,
+space_complexity = null,
+issues = [].
 
 CODE QUALITY:
-Separate observations from suggestions.
-Do not report ordinary style preferences as bugs.
+The code_quality object MUST contain only:
+observations, suggestions.
+
+Each code-quality finding MUST contain only the fields
+allowed by the application schema.
+
+Do not add extra fields.
 
 CORRECTED CODE:
 Only provide corrected code when an actual fix is justified.
@@ -3068,6 +3107,20 @@ CONFIDENCE:
 Return an integer from 0 to 100.
 Base confidence on how directly the supplied source supports
 the finding.
+
+FINDING QUALITY:
+Report only concrete, independently meaningful issues.
+
+Do not create a second finding merely because an existing bug could
+have a secondary consequence.
+
+Do not report speculative security risks without direct evidence.
+
+Do not duplicate the same vulnerability in multiple forms.
+
+For example, if shell=True with unsanitized user input proves command
+injection, report that vulnerability once rather than creating additional
+speculative findings for the same code.
 
 OUTPUT:
 Return ONLY valid JSON matching the application's required
