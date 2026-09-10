@@ -33,54 +33,53 @@ class PromptBuilder:
     ) -> Set[str]:
 
         text = query.lower().strip()
-
-        # ========================================================
+        
+        # --------------------------------------------------------
         # COMPREHENSIVE REVIEW
-        # ========================================================
+        # --------------------------------------------------------
 
-        comprehensive_patterns = (
-            "comprehensive",
-            "complete review",
-            "complete analysis",
+        comprehensive_patterns = [
+            "comprehensive code review",
+            "comprehensive review",
+            "comprehensive analysis",
             "complete code review",
+            "complete review",
             "complete project review",
-            "full review",
-            "full analysis",
             "full code review",
-            "full project review",
+            "full review",
             "project-wide review",
             "project wide review",
-            "project-wide analysis",
-            "project wide analysis",
-            "entire project",
-            "entire code",
-            "whole project",
-            "whole codebase",
+            "analyze the entire project",
+            "analyse the entire project",
+            "review the entire project",
             "analyze everything",
             "analyse everything",
             "review everything",
             "review all aspects",
             "review all categories",
             "review all areas"
-        )
+        ]
 
-        # Comprehensive intent ALWAYS has priority.
         if any(
             pattern in text
             for pattern in comprehensive_patterns
         ):
             return {
-                "full_review",
                 "bug_review",
                 "error_review",
                 "security",
                 "performance",
-                "code_quality"
+                "code_quality",
+                "full_review"
             }
 
-        # ========================================================
+                # --------------------------------------------------------
         # EXPLICIT TARGETED REVIEW
-        # ========================================================
+        # --------------------------------------------------------
+        # Check explicit review intent BEFORE fallback keywords.
+        # This prevents words such as "bugs", "issues", or
+        # "errors" inside instructions like "Do not report bugs"
+        # from activating unrelated review modes.
 
         if (
             "security review" in text
@@ -93,15 +92,10 @@ class PromptBuilder:
             "bug review" in text
             or "bug analysis" in text
             or "debugging review" in text
+            or "runtime error review" in text
+            or "error review" in text
         ):
             return {"bug_review"}
-
-        if (
-            "error review" in text
-            or "error analysis" in text
-            or "runtime error review" in text
-        ):
-            return {"error_review"}
 
         if (
             "performance review" in text
@@ -124,6 +118,8 @@ class PromptBuilder:
             "structure review" in text
             or "structure analysis" in text
             or "project structure" in text
+            or "analyze the structure" in text
+            or "analyse the structure" in text
         ):
             return {"structure"}
 
@@ -132,71 +128,280 @@ class PromptBuilder:
             or "libraries review" in text
             or "dependency review" in text
             or "dependency analysis" in text
+            or "analyze dependencies" in text
+            or "analyse dependencies" in text
         ):
             return {"libraries"}
-
-        # ========================================================
-        # FALLBACK KEYWORDS
-        # ========================================================
+        
+        
 
         modes: Set[str] = set()
 
+        # --------------------------------------------------------
+        # COMPLETE / FULL REVIEW
+        # --------------------------------------------------------
+
+        full_review_keywords = [
+            "complete analysis",
+            "complete review",
+            "complete code review",
+            "complete project review",
+            "complete project-wide review",
+            "full analysis",
+            "full review",
+            "full code review",
+            "full project review",
+            "analyze completely",
+            "analyse completely",
+            "analyze everything",
+            "analyse everything",
+            "review everything",
+            "analyze the code completely",
+            "analyse the code completely",
+            "review the entire project",
+            "analyze the entire project",
+            "analyse the entire project",
+            "project-wide review",
+            "project wide review",
+            "project-wide analysis",
+            "project wide analysis"
+        ]
+
         if any(
-            word in text
-            for word in (
-                "bug",
-                "bugs",
-                "buggy",
-                "issue",
-                "issues"
-            )
+            keyword in text
+            for keyword in full_review_keywords
+        ):
+            return {
+                "full_review",
+                "bug_review",
+                "security",
+                "performance",
+                "code_quality"
+            }
+
+        # --------------------------------------------------------
+        # BUG / ERROR
+        # --------------------------------------------------------
+
+        bug_keywords = [
+            "bug",
+            "bugs",
+            "error",
+            "errors",
+            "runtime error",
+            "runtime errors",
+            "exception",
+            "exceptions",
+            "logical error",
+            "logical errors",
+            "logic error",
+            "logic errors",
+            "issue",
+            "issues",
+            "wrong with",
+            "problem",
+            "problems",
+            "debug",
+            "debugging",
+            "crash",
+            "failure",
+            "failures"
+        ]
+
+        if any(
+            keyword in text
+            for keyword in bug_keywords
         ):
             modes.add("bug_review")
 
-        if any(
-            word in text
-            for word in (
-                "error",
-                "errors",
-                "exception",
-                "exceptions"
-            )
-        ):
-            modes.add("error_review")
+        # --------------------------------------------------------
+        # SECURITY
+        # --------------------------------------------------------
+
+        security_keywords = [
+            "security",
+            "secure",
+            "vulnerability",
+            "vulnerabilities",
+            "security issue",
+            "security issues",
+            "security flaw",
+            "security flaws",
+            "security vulnerability",
+            "security vulnerabilities",
+            "injection",
+            "authentication",
+            "authorization",
+            "secret",
+            "secrets",
+            "password",
+            "api key",
+            "apikey",
+            "credential",
+            "credentials",
+            "hardcoded password",
+            "hardcoded secret"
+        ]
 
         if any(
-            word in text
-            for word in (
-                "security",
-                "vulnerability",
-                "vulnerabilities"
-            )
+            keyword in text
+            for keyword in security_keywords
         ):
             modes.add("security")
 
+        # --------------------------------------------------------
+        # PERFORMANCE
+        # --------------------------------------------------------
+
+        performance_keywords = [
+            "performance",
+            "complexity",
+            "time complexity",
+            "space complexity",
+            "optimize",
+            "optimise",
+            "optimization",
+            "optimisation",
+            "efficient",
+            "efficiency",
+            "slow",
+            "memory usage",
+            "memory",
+            "scalability",
+            "scalable",
+            "bottleneck",
+            "bottlenecks"
+        ]
+
         if any(
-            word in text
-            for word in (
-                "performance",
-                "optimization",
-                "optimisation",
-                "complexity"
-            )
+            keyword in text
+            for keyword in performance_keywords
         ):
             modes.add("performance")
 
+        # --------------------------------------------------------
+        # CODE QUALITY
+        # --------------------------------------------------------
+
+        quality_keywords = [
+            "code quality",
+            "quality",
+            "readability",
+            "maintainability",
+            "maintainable",
+            "refactor",
+            "refactoring",
+            "clean code",
+            "improve code",
+            "improvements",
+            "best practices",
+            "naming",
+            "duplication",
+            "duplicated code",
+            "technical debt",
+            "structure"
+        ]
+
         if any(
-            word in text
-            for word in (
-                "quality",
-                "maintainability",
-                "readability"
-            )
+            keyword in text
+            for keyword in quality_keywords
         ):
             modes.add("code_quality")
 
+        # --------------------------------------------------------
+        # EXPLANATION
+        # --------------------------------------------------------
+
+        explanation_keywords = [
+            "explain",
+            "explanation",
+            "purpose",
+            "summary",
+            "summarize",
+            "summarise",
+            "what does",
+            "what is this",
+            "how does",
+            "how this",
+            "working",
+            "workflow",
+            "flow",
+            "describe"
+        ]
+
+        if any(
+            keyword in text
+            for keyword in explanation_keywords
+        ):
+            modes.add("explanation")
+
+        # --------------------------------------------------------
+        # OUTPUT
+        # --------------------------------------------------------
+
+        output_keywords = [
+            "output",
+            "expected output",
+            "what will print",
+            "what is printed",
+            "result of this code",
+            "runtime result"
+        ]
+
+        if any(
+            keyword in text
+            for keyword in output_keywords
+        ):
+            modes.add("output")
+
+        # --------------------------------------------------------
+        # METHODS / CLASSES
+        # --------------------------------------------------------
+
+        structure_keywords = [
+            "method",
+            "methods",
+            "function",
+            "functions",
+            "class",
+            "classes",
+            "component",
+            "components"
+        ]
+
+        if any(
+            keyword in text
+            for keyword in structure_keywords
+        ):
+            modes.add("structure")
+
+        # --------------------------------------------------------
+        # LIBRARIES
+        # --------------------------------------------------------
+
+        library_keywords = [
+            "library",
+            "libraries",
+            "dependency",
+            "dependencies",
+            "package",
+            "packages",
+            "import",
+            "imports"
+        ]
+
+        if any(
+            keyword in text
+            for keyword in library_keywords
+        ):
+            modes.add("libraries")
+
+        # --------------------------------------------------------
+        # DEFAULT
+        # --------------------------------------------------------
+
         if not modes:
-            modes.add("bug_review")
+            modes.add("general")
 
         return modes
 
