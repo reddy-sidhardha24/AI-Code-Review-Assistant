@@ -1,0 +1,94 @@
+[
+  {
+    "test": "Undefined Variable",
+    "language": "Python",
+    "expected": [
+      "bug"
+    ],
+    "status": "RATE_LIMITED",
+    "error": "{\"detail\":\"AI model rate limit reached. Please try again shortly.\"}"
+  },
+  {
+    "test": "Division By Zero",
+    "language": "Python",
+    "expected": [
+      "error"
+    ],
+    "status": "RATE_LIMITED",
+    "error": "{\"detail\":\"AI model rate limit reached. Please try again shortly.\"}"
+  },
+  {
+    "test": "Missing Dictionary Key",
+    "language": "Python",
+    "expected": [
+      "error"
+    ],
+    "status": "RATE_LIMITED",
+    "error": "{\"detail\":\"AI model rate limit reached. Please try again shortly.\"}"
+  },
+  {
+    "test": "SQL Injection",
+    "language": "Python",
+    "expected": [
+      "security"
+    ],
+    "status": "RATE_LIMITED",
+    "error": "{\"detail\":\"AI model rate limit reached. Please try again shortly.\"}"
+  },
+  {
+    "test": "Command Injection",
+    "language": "Python",
+    "expected": [
+      "security"
+    ],
+    "status": "RATE_LIMITED",
+    "error": "{\"detail\":\"AI model rate limit reached. Please try again shortly.\"}"
+  },
+  {
+    "test": "None Handling",
+    "language": "Python",
+    "expected": [
+      "error"
+    ],
+    "status": "RATE_LIMITED",
+    "error": "{\"detail\":\"AI model rate limit reached. Please try again shortly.\"}"
+  },
+  {
+    "test": "Nested Loop Performance",
+    "language": "Python",
+    "expected": [
+      "performance"
+    ],
+    "status": "RATE_LIMITED",
+    "error": "{\"detail\":\"AI model rate limit reached. Please try again shortly.\"}"
+  },
+  {
+    "test": "Hardcoded API Key",
+    "language": "Python",
+    "expected": [
+      "security"
+    ],
+    "status": "RATE_LIMITED",
+    "error": "{\"detail\":\"AI model rate limit reached. Please try again shortly.\"}"
+  },
+  {
+    "test": "Java Array Error",
+    "language": "Java",
+    "expected": [
+      "bug",
+      "error"
+    ],
+    "status": "RATE_LIMITED",
+    "error": "{\"detail\":\"AI model rate limit reached. Please try again shortly.\"}"
+  },
+  {
+    "test": "C++ Array Error",
+    "language": "C++",
+    "expected": [
+      "bug",
+      "error"
+    ],
+    "status": "RATE_LIMITED",
+    "error": "{\"detail\":\"AI model rate limit reached. Please try again shortly.\"}"
+  }
+]

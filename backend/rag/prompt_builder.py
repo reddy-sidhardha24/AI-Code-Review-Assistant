@@ -2874,6 +2874,7 @@ Do NOT include type or fix inside security issues.
 issues_found MUST equal the number of security issues.
 
 PERFORMANCE:
+
 Performance problems MUST be reported under performance.issues.
 
 The performance object MUST contain only:
@@ -2882,17 +2883,56 @@ space_complexity,
 issues.
 
 Each performance issue MUST contain ONLY:
-title, description, file, line, line_range, evidence,
-impact, suggestion, confidence.
+title,
+description,
+file,
+line,
+line_range,
+evidence,
+impact,
+suggestion,
+confidence.
 
 Do NOT include:
-severity, type, fix, or any other fields
+severity,
+type,
+fix,
+or any other fields
 inside performance issues.
+
+IMPORTANT PERFORMANCE OUTPUT RULE:
+
+If a performance issue exists, every issue MUST contain:
+title,
+description,
+file,
+line,
+line_range,
+evidence,
+impact,
+suggestion,
+confidence.
+
+Never omit any required performance property.
+
+If an exact line number cannot be determined,
+use the closest relevant source line.
 
 If there are no performance issues:
 time_complexity = null,
 space_complexity = null,
 issues = [].
+
+Do not invent performance problems.
+
+Only report performance issues directly supported
+by the supplied source code.
+
+For nested loops over the same input, analyze the
+resulting time complexity carefully.
+
+For example, two nested loops over n elements
+normally indicate O(n²) time complexity.
 
 CODE QUALITY:
 The code_quality object MUST contain only:

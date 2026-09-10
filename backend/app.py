@@ -1683,6 +1683,11 @@ def review_project(
                             "the supplied source code. "
                             
                             "Every security issue must include a severity "
+                            "Every performance issue must include:"
+                            "title, description, file, line, line_range,"
+                            "evidence, impact, suggestion, confidence."
+                            "Never omit any required performance property."
+                            "Never add severity, type, or fix to performance issues."
                             "field with exactly one of critical, high, medium, low. "
                             "Never omit the severity field. "
                             "Every error finding must include a fix field. "

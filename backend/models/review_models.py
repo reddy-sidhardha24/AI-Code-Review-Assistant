@@ -171,10 +171,7 @@ class PerformanceIssue(BaseModel):
 
     suggestion: Optional[str] = None
 
-    confidence: int = Field(
-        ge=0,
-        le=100
-    )
+    confidence: Optional[int] = Field(default=None, ge=0, le=100)
 
 
 # ============================================================
@@ -187,12 +184,7 @@ class PerformanceInfo(BaseModel):
 
     space_complexity: Optional[str] = None
 
-    issues: List[
-        PerformanceIssue
-    ] = Field(
-        default_factory=list
-    )
-
+    issues: List[PerformanceIssue] = Field(default_factory=list)
 
 # ============================================================
 # SECURITY FINDING
