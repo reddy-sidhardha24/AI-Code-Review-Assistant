@@ -1,20 +1,23 @@
 {
-    "project_name": "c-test1",
+    "project_name": "temp_project",
     "total_files": 1,
-    "total_lines": 29,
+    "total_lines": 53,
     "languages": {
-        "C++": {
+        "Python": {
             "files": 1,
-            "lines": 29
+            "lines": 53
         }
     },
     "files": [
         {
-            "name": "cplustest1.cpp",
-            "path": "cplustest1.cpp",
-            "extension": ".cpp",
-            "language": "C++",
-            "lines": 29
+            "name": "test1.py",
+            "path": "test1.py",
+            "extension": ".py",
+            "language": "Python",
+            "lines": 53
         }
-    ]
+    ],
+    "project_path": "uploads\\temp_project",
+    "input_type": "source_file",
+    "original_filename": "test1.py"
 }

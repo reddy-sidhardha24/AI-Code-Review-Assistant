@@ -31,3 +31,15 @@ __pycache__/
 # Cache
 .cache/
 
+# Runtime / generated project data
+backend/data/
+backend/db/
+backend/extracted/
+backend/uploads/
+extracted/
+uploads/
+vector_db/
+backend/vector_db/
+
+# Temporary uploaded project files
+backend/uploads/temp_project/
