@@ -1,4 +1,19 @@
 import React, { useState } from "react";
+import API from "../api";
+import CodeDiffPreview from "./CodeDiffPreview";
+
+const getDownloadErrorMessage = async (error: any, fallback: string): Promise<string> => {
+  const responseData = error?.response?.data;
+  if (responseData instanceof Blob) {
+    try {
+      const parsed = JSON.parse(await responseData.text());
+      if (parsed?.detail) return String(parsed.detail);
+    } catch {
+      // Keep the generic message when the server response is not JSON.
+    }
+  }
+  return responseData?.detail || fallback;
+};
 
 interface ReviewModalProps {
   reviewData: any;
@@ -96,7 +111,8 @@ const ModalIssueCard = ({ issue, defaultCategory }: { issue: any; defaultCategor
 };
 
 const ReviewModal: React.FC<ReviewModalProps> = ({ reviewData, onClose }) => {
-  const [activeTab, setActiveTab] = useState<"summary" | "bugs" | "security" | "performance" | "quality" | "code">("summary");
+  const [activeTab, setActiveTab] = useState<"summary" | "bugs" | "security" | "performance" | "quality" | "code" | "fixes">("summary");
+  const [isFullscreen, setIsFullscreen] = useState(false);
 
   if (!reviewData) return null;
 
@@ -110,17 +126,123 @@ const ReviewModal: React.FC<ReviewModalProps> = ({ reviewData, onClose }) => {
   const observations = review.code_quality?.observations || [];
   const suggestions = review.code_quality?.suggestions || [];
   const correctedCode = Array.isArray(review.corrected_code) ? review.corrected_code : [];
+  const codeFixIssues = [
+    ...allBugs,
+    ...security,
+    ...performance,
+    ...observations,
+    ...(Array.isArray(review.detected_issues) ? review.detected_issues : [])
+  ];
+  const hasProposedFixes = correctedCode.some((item: any) =>
+    typeof (item?.code || item?.content) === "string" && (item.code || item.content).trim()
+  ) || codeFixIssues.some((issue: any) =>
+    [issue?.after_code, issue?.corrected_code, issue?.suggested_solution].some(
+      (value) => typeof value === "string" && value.trim()
+    )
+  );
+  const reviewWithProject = {
+    ...review,
+    project: {
+      ...(review.project || {}),
+      name: review.project?.name || review.project_name || reviewData.projectName || ""
+    }
+  };
 
   const score = reviewData.score ?? review.score ?? null;
   const confidence = reviewData.confidence ?? review.confidence ?? 90;
 
+  const [downloading, setDownloading] = useState<string | null>(null);
+
+  const downloadReport = async (fmt: "pdf" | "markdown" | "html") => {
+    setDownloading(fmt);
+    try {
+      const res = await API.post("/api/download-report", {
+        format: fmt,
+        category: "full_review",
+        review_data: review
+      }, { responseType: "blob" });
+      const ext = fmt === "pdf" ? "pdf" : fmt === "html" ? "html" : "md";
+      const blob = new Blob([res.data]);
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `${reviewData.projectName || "Code_Review"}_Audit_Report.${ext}`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch (e) {
+      console.error("Report download error:", e);
+      if (fmt === "markdown") {
+        const md = `# Review Report — ${reviewData.projectName || "Code Review"}\n\n**Date:** ${new Date(reviewData.createdAt || Date.now()).toLocaleString()}\n**Score:** ${score !== null ? `${score}/100` : "N/A"}\n\n## Executive Summary\n${review.answer_summary || "Review completed."}\n\n## Final Verdict\n${review.final_verdict || "No verdict."}`;
+        const blob = new Blob([md], { type: "text/markdown" });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = `Review_Report_${reviewData.id || "export"}.md`;
+        a.click();
+        URL.revokeObjectURL(url);
+      } else {
+        alert(`Failed to generate ${fmt.toUpperCase()} report download.`);
+      }
+    } finally {
+      setDownloading(null);
+    }
+  };
+
+  const downloadFullProjectZip = async () => {
+    setDownloading("full-zip");
+    try {
+      const res = await API.post("/api/download-corrected-project", {
+        project_name: reviewData.projectName || reviewData.project_name || (review.project && review.project.name),
+        review_data: review
+      }, { responseType: "blob" });
+      const blob = new Blob([res.data], { type: "application/zip" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `${reviewData.projectName || "Project"}_Corrected_Full.zip`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch (e) {
+      console.error("Full ZIP download error:", e);
+      alert(await getDownloadErrorMessage(e, "Failed to package full project archive."));
+    } finally {
+      setDownloading(null);
+    }
+  };
+
+  const downloadPatchedFilesZip = async () => {
+    setDownloading("patch-zip");
+    try {
+      const res = await API.post("/api/download-corrected-files", {
+        project_name: reviewData.projectName || reviewData.project_name || (review.project && review.project.name),
+        review_data: review
+      }, { responseType: "blob" });
+      const blob = new Blob([res.data], { type: "application/zip" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `${reviewData.projectName || "Project"}_Corrected_Files_Only.zip`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch (e) {
+      console.error("Patched ZIP download error:", e);
+      alert("Failed to package patched files archive.");
+    } finally {
+      setDownloading(null);
+    }
+  };
+
   return (
     <div className="review-modal-backdrop" onClick={onClose}>
-      <div className="review-modal-container" onClick={(e) => e.stopPropagation()}>
+      <div
+        className={`review-modal-container ${isFullscreen ? "fullscreen-modal" : ""}`}
+        style={isFullscreen ? { width: "96vw", maxWidth: "96vw", height: "94vh", maxHeight: "94vh" } : undefined}
+        onClick={(e) => e.stopPropagation()}
+      >
         {/* Header */}
         <div className="review-modal-header">
           <div className="modal-title-group">
-            <span className="modal-badge">Past Review Reopened</span>
+            <span className="modal-badge">Past Review Audit</span>
             <h2 className="modal-title">{reviewData.projectName || reviewData.project_name || "Code Review Details"}</h2>
             <div className="modal-meta">
               <span>📅 {new Date(reviewData.createdAt || reviewData.created_at || Date.now()).toLocaleString()}</span>
@@ -128,66 +250,144 @@ const ReviewModal: React.FC<ReviewModalProps> = ({ reviewData, onClose }) => {
               <span>💻 {reviewData.language || "Multi-language"}</span>
               <span>•</span>
               <span>Confidence: {confidence}%</span>
+              <span>•</span>
+              <span className={`modal-agent-badge ${(review.agent_mode || reviewData.agent_mode) === "multi" ? "multi" : "single"}`}>
+                {(review.agent_mode || reviewData.agent_mode) === "multi" ? "🤖 Multi-Agent Ensemble" : "⚡ Single-Agent"}
+              </span>
+              {(review.audited_by?.name || reviewData.audited_by?.name) && (
+                <>
+                  <span>•</span>
+                  <span className="modal-auditor-badge">👤 {review.audited_by?.name || reviewData.audited_by?.name}</span>
+                </>
+              )}
             </div>
           </div>
 
           <div className="modal-header-actions">
+            <button
+              type="button"
+              className="btn-modal-fullscreen"
+              onClick={() => setIsFullscreen(!isFullscreen)}
+              title={isFullscreen ? "Restore standard size" : "Expand report to fullscreen"}
+              style={{
+                background: "var(--bg-subtle, rgba(255,255,255,0.06))",
+                border: "1px solid var(--border, rgba(255,255,255,0.15))",
+                color: "var(--text-main, #e2e8f0)",
+                borderRadius: "8px",
+                padding: "6px 14px",
+                fontSize: "0.85rem",
+                fontWeight: 500,
+                cursor: "pointer",
+                display: "flex",
+                alignItems: "center",
+                gap: "6px"
+              }}
+            >
+              {isFullscreen ? "🗗 Standard View" : "⛶ Fullscreen"}
+            </button>
             {score !== null && (
               <div className={`score-badge ${score >= 80 ? "score-high" : score >= 60 ? "score-mid" : "score-low"}`}>
                 <span className="score-val">{score}</span>
                 <span className="score-max">/100</span>
               </div>
             )}
-            <button className="modal-close-btn" onClick={onClose}>✕</button>
+            <button
+              className="modal-close-btn"
+              onClick={onClose}
+              aria-label="Close modal"
+              style={{
+                borderRadius: "50%",
+                width: "34px",
+                height: "34px",
+                minWidth: "34px",
+                minHeight: "34px",
+                maxWidth: "34px",
+                maxHeight: "34px",
+                display: "inline-flex",
+                alignItems: "center",
+                justifyContent: "center",
+                padding: 0,
+                lineHeight: 1
+              }}
+            >
+              ✕
+            </button>
           </div>
         </div>
 
         {/* Question prompt */}
-        <div className="modal-question-box">
-          <span className="question-label">Review Question:</span>
-          <span className="question-text">"{reviewData.question}"</span>
-        </div>
+        {reviewData.question && (
+          <div className="modal-question-box">
+            <span className="question-label">Review Prompt:</span>
+            <span className="question-text">"{reviewData.question}"</span>
+          </div>
+        )}
 
         {/* Modal Navigation Tabs */}
         <div className="modal-tabs">
           <button
+            type="button"
             className={`modal-tab ${activeTab === "summary" ? "active" : ""}`}
             onClick={() => setActiveTab("summary")}
           >
-            Overview
+            <span className="modal-tab-icon">📊</span>
+            <span className="modal-tab-label">Overview</span>
           </button>
           <button
+            type="button"
             className={`modal-tab ${activeTab === "bugs" ? "active" : ""}`}
             onClick={() => setActiveTab("bugs")}
           >
-            Bugs & Errors ({allBugs.length})
+            <span className="modal-tab-icon">🐛</span>
+            <span className="modal-tab-label">Bugs & Errors</span>
+            <span className="modal-tab-count">{allBugs.length}</span>
           </button>
           <button
+            type="button"
             className={`modal-tab ${activeTab === "security" ? "active" : ""}`}
             onClick={() => setActiveTab("security")}
           >
-            Security ({security.length})
+            <span className="modal-tab-icon">🛡️</span>
+            <span className="modal-tab-label">Security</span>
+            <span className="modal-tab-count">{security.length}</span>
           </button>
           <button
+            type="button"
             className={`modal-tab ${activeTab === "performance" ? "active" : ""}`}
             onClick={() => setActiveTab("performance")}
           >
-            Performance ({performance.length})
+            <span className="modal-tab-icon">⚡</span>
+            <span className="modal-tab-label">Performance</span>
+            <span className="modal-tab-count">{performance.length}</span>
           </button>
           <button
+            type="button"
             className={`modal-tab ${activeTab === "quality" ? "active" : ""}`}
             onClick={() => setActiveTab("quality")}
           >
-            Quality ({observations.length + suggestions.length})
+            <span className="modal-tab-icon">✨</span>
+            <span className="modal-tab-label">Quality</span>
+            <span className="modal-tab-count">{observations.length + suggestions.length}</span>
           </button>
           {correctedCode.length > 0 && (
             <button
+              type="button"
               className={`modal-tab ${activeTab === "code" ? "active" : ""}`}
               onClick={() => setActiveTab("code")}
             >
-              Corrected Code ({correctedCode.length})
+              <span className="modal-tab-icon">💻</span>
+              <span className="modal-tab-label">Corrected Code</span>
+              <span className="modal-tab-count">{correctedCode.length}</span>
             </button>
           )}
+          <button
+            type="button"
+            className={`modal-tab ${activeTab === "fixes" ? "active" : ""}`}
+            onClick={() => setActiveTab("fixes")}
+          >
+            <span className="modal-tab-icon">🛠️</span>
+            <span className="modal-tab-label">Fixes & Pull Request</span>
+          </button>
         </div>
 
         {/* Modal Body */}
@@ -207,21 +407,33 @@ const ReviewModal: React.FC<ReviewModalProps> = ({ reviewData, onClose }) => {
               )}
 
               <div className="stats-mini-grid">
-                <div className="stat-mini-card">
-                  <span className="stat-num red">{allBugs.length}</span>
-                  <span className="stat-lbl">Bugs / Errors</span>
+                <div className="stat-mini-card bug-stat">
+                  <span className="stat-icon">🐛</span>
+                  <div className="stat-meta">
+                    <span className="stat-num red">{allBugs.length}</span>
+                    <span className="stat-lbl">Bugs & Errors</span>
+                  </div>
                 </div>
-                <div className="stat-mini-card">
-                  <span className="stat-num amber">{security.length}</span>
-                  <span className="stat-lbl">Security Alerts</span>
+                <div className="stat-mini-card security-stat">
+                  <span className="stat-icon">🛡️</span>
+                  <div className="stat-meta">
+                    <span className="stat-num amber">{security.length}</span>
+                    <span className="stat-lbl">Security Alerts</span>
+                  </div>
                 </div>
-                <div className="stat-mini-card">
-                  <span className="stat-num blue">{performance.length}</span>
-                  <span className="stat-lbl">Performance Bottlenecks</span>
+                <div className="stat-mini-card perf-stat">
+                  <span className="stat-icon">⚡</span>
+                  <div className="stat-meta">
+                    <span className="stat-num blue">{performance.length}</span>
+                    <span className="stat-lbl">Performance Bottlenecks</span>
+                  </div>
                 </div>
-                <div className="stat-mini-card">
-                  <span className="stat-num green">{observations.length + suggestions.length}</span>
-                  <span className="stat-lbl">Quality Insights</span>
+                <div className="stat-mini-card quality-stat">
+                  <span className="stat-icon">✨</span>
+                  <div className="stat-meta">
+                    <span className="stat-num green">{observations.length + suggestions.length}</span>
+                    <span className="stat-lbl">Quality Insights</span>
+                  </div>
                 </div>
               </div>
 
@@ -237,6 +449,58 @@ const ReviewModal: React.FC<ReviewModalProps> = ({ reviewData, onClose }) => {
                   </div>
                 </div>
               )}
+
+              {/* DEDICATED DOWNLOAD & EXPORT SECTION */}
+              <div className="modal-export-card">
+                <h4 className="modal-export-title">
+                  📥 Download Reports & Remediation Archives
+                </h4>
+                <p className="modal-export-description">
+                  Export this audit in your preferred industry format or download corrected code archives:
+                </p>
+                <div className="modal-export-actions">
+                  <button
+                    type="button"
+                    onClick={() => downloadReport("pdf")}
+                    disabled={downloading !== null}
+                    className="btn-toolbar modal-export-button"
+                  >
+                    {downloading === "pdf" ? "⏳ Generating..." : "📄 PDF Report"}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => downloadReport("markdown")}
+                    disabled={downloading !== null}
+                    className="btn-toolbar modal-export-button"
+                  >
+                    {downloading === "markdown" ? "⏳ Generating..." : "📝 Markdown (.md)"}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => downloadReport("html")}
+                    disabled={downloading !== null}
+                    className="btn-toolbar modal-export-button"
+                  >
+                    {downloading === "html" ? "⏳ Generating..." : "🌐 Standalone HTML"}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={downloadFullProjectZip}
+                    disabled={downloading !== null}
+                    className="btn-toolbar modal-export-button"
+                  >
+                    {downloading === "full-zip" ? "⏳ Packaging..." : "📦 Full Corrected Project ZIP"}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={downloadPatchedFilesZip}
+                    disabled={downloading !== null}
+                    className="btn-toolbar modal-export-button"
+                  >
+                    {downloading === "patch-zip" ? "⏳ Packaging..." : "📁 Corrected Files Only ZIP"}
+                  </button>
+                </div>
+              </div>
             </div>
           )}
 
@@ -322,10 +586,72 @@ const ReviewModal: React.FC<ReviewModalProps> = ({ reviewData, onClose }) => {
               </div>
             </div>
           )}
+
+          {activeTab === "fixes" && (
+            <div className="tab-pane history-fixes-pane">
+              {hasProposedFixes ? (
+                <CodeDiffPreview review={reviewWithProject} />
+              ) : (
+                <div className="empty-findings">
+                  No proposed code fixes were saved with this review.
+                </div>
+              )}
+            </div>
+          )}
         </div>
 
         {/* Footer */}
         <div className="review-modal-footer">
+          <div className="modal-quick-downloads">
+            <span className="quick-downloads-label">
+              Quick Downloads:
+            </span>
+            <button
+              type="button"
+              className="btn-toolbar"
+              onClick={() => downloadReport("pdf")}
+              disabled={downloading !== null}
+              title="Download high-resolution printable PDF report"
+            >
+              {downloading === "pdf" ? "⏳ Generating..." : "📄 PDF"}
+            </button>
+            <button
+              type="button"
+              className="btn-toolbar"
+              onClick={() => downloadReport("markdown")}
+              disabled={downloading !== null}
+              title="Download Markdown report"
+            >
+              {downloading === "markdown" ? "⏳ Generating..." : "📝 Markdown"}
+            </button>
+            <button
+              type="button"
+              className="btn-toolbar"
+              onClick={() => downloadReport("html")}
+              disabled={downloading !== null}
+              title="Download standalone HTML report"
+            >
+              {downloading === "html" ? "⏳ Generating..." : "🌐 HTML"}
+            </button>
+            <button
+              type="button"
+              className="btn-toolbar"
+              onClick={downloadFullProjectZip}
+              disabled={downloading !== null}
+              title="Download entire project codebase with fixes applied"
+            >
+              {downloading === "full-zip" ? "⏳ Packaging..." : "📦 Full ZIP"}
+            </button>
+            <button
+              type="button"
+              className="btn-toolbar"
+              onClick={downloadPatchedFilesZip}
+              disabled={downloading !== null}
+              title="Download modified and corrected files only"
+            >
+              {downloading === "patch-zip" ? "⏳ Packaging..." : "📁 Patched ZIP"}
+            </button>
+          </div>
           <button className="btn-secondary" onClick={onClose}>Close Window</button>
         </div>
       </div>

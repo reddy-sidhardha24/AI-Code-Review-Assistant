@@ -1,8 +1,7 @@
-import { useEffect, useMemo, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import API from "../api";
 import { useAppAuth } from "../context/AuthContext";
-import { useTheme } from "../context/ThemeContext";
 import ReviewModal from "./ReviewModal";
 
 export interface HistoryReview {
@@ -31,20 +30,14 @@ export interface UploadedFileItem {
 
 function Dashboard() {
   const navigate = useNavigate();
-  const { user, isClerkConfigured } = useAppAuth();
-  const { theme, setTheme, themes } = useTheme();
+  const { user } = useAppAuth();
 
-  const [activeTab, setActiveTab] = useState<"overview" | "reviews" | "files" | "settings">("overview");
+  const [activeTab, setActiveTab] = useState<"overview" | "reviews" | "files">("overview");
   const [history, setHistory] = useState<HistoryReview[]>([]);
   const [files, setFiles] = useState<UploadedFileItem[]>([]);
   const [loading, setLoading] = useState(false);
   const [selectedReview, setSelectedReview] = useState<HistoryReview | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
-  const [actionNotice, setActionNotice] = useState<string | null>(null);
-
-  /* ==========================================================
-     LOAD HISTORY & FILES FROM SQLITE (with localStorage fallback)
-     ========================================================== */
 
   const loadData = useCallback(async () => {
     setLoading(true);
@@ -67,7 +60,7 @@ function Dashboard() {
             score: r.score ?? null,
             confidence: r.confidence ?? 90,
             createdAt: r.created_at,
-            review: r.review || {}
+            review: r.review || {},
           }));
         }
       } catch (err) {
@@ -112,100 +105,46 @@ function Dashboard() {
     loadData();
   }, [loadData]);
 
-  /* ==========================================================
-     DELETE SINGLE REVIEW
-     ========================================================== */
-
   const handleDeleteReview = async (id: string, e?: React.MouseEvent) => {
     if (e) e.stopPropagation();
-    if (!window.confirm("Are you sure you want to delete this review record?")) return;
+    if (!window.confirm("Delete this review from history?")) return;
 
     try {
-      await API.delete(`/api/reviews/${id}`).catch(() => {});
+      await API.delete(`/api/reviews/${id}`);
     } catch (err) {
-      console.warn("API delete notice:", err);
+      console.warn("Could not delete from SQLite API:", err);
     }
 
-    const updated = history.filter((h) => h.id !== id);
+    const updated = history.filter((item) => item.id !== id);
     setHistory(updated);
     localStorage.setItem("codeReviewHistory", JSON.stringify(updated));
-    showNotice("Review record deleted successfully.");
   };
-
-  /* ==========================================================
-     CLEAR ALL REVIEWS
-     ========================================================== */
-
-  const handleClearAll = async () => {
-    if (!window.confirm("Are you sure you want to clear your entire review history? This cannot be undone.")) return;
-
-    try {
-      await API.delete("/api/reviews").catch(() => {});
-    } catch (err) {
-      console.warn("API clear notice:", err);
-    }
-
-    setHistory([]);
-    localStorage.removeItem("codeReviewHistory");
-    showNotice("All review history cleared.");
-  };
-
-  /* ==========================================================
-     DELETE UPLOADED FILE
-     ========================================================== */
 
   const handleDeleteFile = async (id: string) => {
-    if (!window.confirm("Delete this uploaded file record?")) return;
-
+    if (!window.confirm("Delete this file record?")) return;
     try {
       await API.delete(`/api/files/${id}`);
       setFiles((prev) => prev.filter((f) => f.id !== id));
-      showNotice("Uploaded file record deleted.");
     } catch (err) {
-      console.error("Failed to delete file:", err);
-      showNotice("Failed to delete file record.");
+      console.warn("Could not delete file:", err);
     }
   };
 
-  const showNotice = (msg: string) => {
-    setActionNotice(msg);
-    setTimeout(() => setActionNotice(null), 4000);
-  };
-
-  /* ==========================================================
-     STATISTICS
-     ========================================================== */
-
-  const statistics = useMemo(() => {
+  // Real statistics derived purely from actual live data
+  const stats = useMemo(() => {
     const totalReviews = history.length;
-    const bugs = history.reduce((total, item) => total + (item.bugs || 0), 0);
-    const security = history.reduce((total, item) => total + (item.security || 0), 0);
-    const performance = history.reduce((total, item) => total + (item.performance || 0), 0);
-    const quality = history.reduce((total, item) => total + (item.quality || 0), 0);
-    const totalIssues = history.reduce((total, item) => total + (item.issueCount || 0), 0);
-
-    const scoredReviews = history.filter((item) => typeof item.score === "number");
-    const averageScore =
-      scoredReviews.length > 0
-        ? Math.round(scoredReviews.reduce((total, item) => total + (item.score || 0), 0) / scoredReviews.length)
-        : null;
-
-    const averageConfidence =
-      totalReviews > 0
-        ? Math.round(history.reduce((total, item) => total + (item.confidence || 0), 0) / totalReviews)
-        : 92;
+    const totalFiles = files.length;
+    const totalIssues = history.reduce((sum, r) => sum + (r.issueCount || 0), 0);
+    const validScores = history.filter((r) => r.score !== null).map((r) => r.score as number);
+    const avgScore = validScores.length > 0 ? Math.round(validScores.reduce((a, b) => a + b, 0) / validScores.length) : null;
 
     return {
       totalReviews,
-      bugs,
-      security,
-      performance,
-      quality,
+      totalFiles,
       totalIssues,
-      averageScore,
-      averageConfidence,
+      avgScore,
     };
-  }, [history]);
+  }, [history, files]);
 
   const filteredReviews = useMemo(() => {
     if (!searchQuery.trim()) return history;
@@ -218,466 +157,306 @@ function Dashboard() {
     );
   }, [history, searchQuery]);
 
-  const formatDate = (dateString: string) => {
+  const formatFileSize = (bytes: number) => {
+    if (bytes < 1024) return bytes + " B";
+    if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + " KB";
+    return (bytes / 1024 / 1024).toFixed(2) + " MB";
+  };
+
+  const formatDate = (iso: string) => {
     try {
-      return new Intl.DateTimeFormat("en-IN", {
-        day: "2-digit",
-        month: "short",
+      return new Date(iso).toLocaleDateString(undefined, {
         year: "numeric",
+        month: "short",
+        day: "numeric",
         hour: "2-digit",
         minute: "2-digit",
-      }).format(new Date(dateString));
+      });
     } catch {
-      return "Recent";
+      return iso;
     }
   };
 
-  const formatFileSize = (bytes: number) => {
-    if (!bytes || bytes === 0) return "0 B";
-    if (bytes < 1024) return `${bytes} B`;
-    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
-    return `${(bytes / (1024 * 1024)).toFixed(2)} MB`;
-  };
-
   return (
-    <main className="dashboard-page-modern">
-      <div className="container">
-        {/* Notice alert */}
-        {actionNotice && (
-          <div className="dashboard-notification-banner">
-            <span>✓ {actionNotice}</span>
-          </div>
-        )}
-
-        {/* HEADER */}
-        <section className="dashboard-header">
-          <div>
-            <div className="section-label">AUTHENTICATED WORKSPACE</div>
-            <h1>Developer Dashboard</h1>
-            <p>
-              Welcome back, <strong>{user?.fullName || user?.email || "Developer"}</strong>. Manage your code reviews, inspect previous reports, and review uploaded codebase files.
-            </p>
-          </div>
-
-          <div className="header-action-buttons">
-            <button
-              className="dashboard-review-button"
-              onClick={() => navigate("/review")}
-            >
-              <span>✦</span> New Review <span>→</span>
-            </button>
-          </div>
-        </section>
-
-        {/* NAVIGATION TABS */}
-        <div className="dashboard-nav-tabs">
-          <button
-            className={`dash-tab ${activeTab === "overview" ? "active" : ""}`}
-            onClick={() => setActiveTab("overview")}
-          >
-            📊 Analytics & Overview
-          </button>
-          <button
-            className={`dash-tab ${activeTab === "reviews" ? "active" : ""}`}
-            onClick={() => setActiveTab("reviews")}
-          >
-            📋 Previous Reviews ({history.length})
-          </button>
-          <button
-            className={`dash-tab ${activeTab === "files" ? "active" : ""}`}
-            onClick={() => setActiveTab("files")}
-          >
-            📁 Uploaded Files ({files.length})
-          </button>
-          <button
-            className={`dash-tab ${activeTab === "settings" ? "active" : ""}`}
-            onClick={() => setActiveTab("settings")}
-          >
-            ⚙️ Profile & Themes
-          </button>
+    <main className="dashboard-container">
+      <div className="dashboard-header">
+        <div>
+          <h1>Workspace Dashboard</h1>
+          <p style={{ color: "var(--text-secondary)", marginTop: "4px" }}>
+            Welcome back{user?.fullName ? `, ${user.fullName}` : ""}. Track your audits, files, and health scores.
+          </p>
         </div>
 
-        {/* TAB 1: OVERVIEW */}
-        {activeTab === "overview" && (
-          <div className="dashboard-tab-content">
-            {/* STATS GRID */}
-            <section className="dashboard-stats">
-              <article className="dashboard-stat-card">
-                <div className="stat-card-top">
-                  <span>TOTAL REVIEWS</span>
-                  <div className="stat-icon purple">◈</div>
-                </div>
-                <strong>{statistics.totalReviews}</strong>
-                <small>sessions indexed in SQLite</small>
-              </article>
+        <div style={{ display: "flex", gap: "10px" }}>
+          <button className="btn-secondary" onClick={() => navigate("/configuration")}>
+            ⚙️ Configuration
+          </button>
+          <button className="btn-primary" onClick={() => navigate("/review")}>
+            + Run New Review
+          </button>
+        </div>
+      </div>
 
-              <article className="dashboard-stat-card">
-                <div className="stat-card-top">
-                  <span>BUGS FOUND</span>
-                  <div className="stat-icon red">!</div>
-                </div>
-                <strong className="red-value">{statistics.bugs}</strong>
-                <small>bugs & errors detected</small>
-              </article>
+      {/* REAL DATA STATS CARDS */}
+      <div className="dashboard-stats-grid">
+        <div className="stat-card">
+          <div className="stat-num">{stats.totalReviews}</div>
+          <div className="stat-label">Total Completed Reviews</div>
+        </div>
 
-              <article className="dashboard-stat-card">
-                <div className="stat-card-top">
-                  <span>SECURITY</span>
-                  <div className="stat-icon amber">⚠</div>
-                </div>
-                <strong className="amber-value">{statistics.security}</strong>
-                <small>vulnerabilities reported</small>
-              </article>
+        <div className="stat-card">
+          <div className="stat-num">{stats.totalIssues}</div>
+          <div className="stat-label">Detected Issues Flagged</div>
+        </div>
 
-              <article className="dashboard-stat-card">
-                <div className="stat-card-top">
-                  <span>AVG SCORE</span>
-                  <div className="stat-icon green">★</div>
-                </div>
-                <strong className="green-value">
-                  {statistics.averageScore !== null ? `${statistics.averageScore}%` : "N/A"}
-                </strong>
-                <small>code health index</small>
-              </article>
-            </section>
-
-            {/* QUICK ACTIONS & RECENT ACTIVITY */}
-            <section className="dashboard-panels-grid">
-              <div className="dashboard-panel">
-                <div className="panel-header">
-                  <h3>⚡ Quick Actions</h3>
-                </div>
-                <div className="quick-actions-list">
-                  <div className="quick-action-item" onClick={() => navigate("/review")}>
-                    <div className="action-icon">🔍</div>
-                    <div className="action-meta">
-                      <strong>Start Code Analysis</strong>
-                      <span>Submit prompts or check for bugs & security flaws</span>
-                    </div>
-                    <span className="action-arrow">→</span>
-                  </div>
-
-                  <div className="quick-action-item" onClick={() => navigate("/")}>
-                    <div className="action-icon">📤</div>
-                    <div className="action-meta">
-                      <strong>Upload Codebase / ZIP</strong>
-                      <span>Index multiple source files or repositories into FAISS</span>
-                    </div>
-                    <span className="action-arrow">→</span>
-                  </div>
-
-                  <div className="quick-action-item" onClick={() => navigate("/themes")}>
-                    <div className="action-icon">🎨</div>
-                    <div className="action-meta">
-                      <strong>Customize Workspace Theme</strong>
-                      <span>Select Dark, Light, Purple Lavender, or Emerald Green</span>
-                    </div>
-                    <span className="action-arrow">→</span>
-                  </div>
-                </div>
-              </div>
-
-              <div className="dashboard-panel">
-                <div className="panel-header">
-                  <h3>🕒 Recent Reviews</h3>
-                  <button className="panel-sub-btn" onClick={() => setActiveTab("reviews")}>
-                    View All ({history.length})
-                  </button>
-                </div>
-
-                {history.length === 0 ? (
-                  <div className="panel-empty-state">
-                    <p>No reviews analyzed yet.</p>
-                    <button className="btn-primary" onClick={() => navigate("/review")}>
-                      Run Your First Review
-                    </button>
-                  </div>
-                ) : (
-                  <div className="recent-reviews-stream">
-                    {history.slice(0, 4).map((rev) => (
-                      <div
-                        key={rev.id}
-                        className="recent-review-row"
-                        onClick={() => setSelectedReview(rev)}
-                      >
-                        <div className="row-left">
-                          <span className="row-proj-name">{rev.projectName}</span>
-                          <span className="row-question">"{rev.question}"</span>
-                        </div>
-                        <div className="row-right">
-                          <span className="row-date">{formatDate(rev.createdAt)}</span>
-                          <button
-                            type="button"
-                            className="btn-reopen-mini"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setSelectedReview(rev);
-                            }}
-                          >
-                            Reopen ↗
-                          </button>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-            </section>
+        <div className="stat-card">
+          <div className="stat-num">
+            {stats.avgScore !== null ? `${stats.avgScore}/100` : "—"}
           </div>
-        )}
+          <div className="stat-label">Average Code Health Score</div>
+        </div>
 
-        {/* TAB 2: PREVIOUS REVIEWS */}
-        {activeTab === "reviews" && (
-          <div className="dashboard-tab-content">
-            <div className="reviews-filter-bar">
-              <input
-                type="text"
-                placeholder="Search reviews by project name, language, or question..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="reviews-search-input"
-              />
-              {history.length > 0 && (
-                <button className="btn-danger-outline" onClick={handleClearAll}>
-                  🗑️ Clear All Reviews
-                </button>
-              )}
+        <div className="stat-card">
+          <div className="stat-num">{stats.totalFiles}</div>
+          <div className="stat-label">Indexed Files Tracked</div>
+        </div>
+      </div>
+
+      {/* DASHBOARD TABS */}
+      <div className="dashboard-tabs">
+        <button
+          type="button"
+          className={`dash-tab-btn ${activeTab === "overview" ? "active" : ""}`}
+          onClick={() => setActiveTab("overview")}
+        >
+          📊 Activity Overview
+        </button>
+        <button
+          type="button"
+          className={`dash-tab-btn ${activeTab === "reviews" ? "active" : ""}`}
+          onClick={() => setActiveTab("reviews")}
+        >
+          📝 Past Reviews ({history.length})
+        </button>
+        <button
+          type="button"
+          className={`dash-tab-btn ${activeTab === "files" ? "active" : ""}`}
+          onClick={() => setActiveTab("files")}
+        >
+          📁 Uploaded Files ({files.length})
+        </button>
+      </div>
+
+      {/* TAB 1: OVERVIEW */}
+      {activeTab === "overview" && (
+        <div>
+          {history.length === 0 ? (
+            <div className="empty-state">
+              <div className="empty-icon">🚀</div>
+              <h3>No Reviews Executed Yet</h3>
+              <p>Upload a project ZIP, source files, or connect your GitHub repository to generate your first audit.</p>
+              <button className="btn-primary" onClick={() => navigate("/")}>
+                Upload Project Now →
+              </button>
             </div>
-
-            {filteredReviews.length === 0 ? (
-              <div className="reviews-empty-box">
-                <div className="empty-icon">📂</div>
-                <h3>No Review Records Found</h3>
-                <p>
-                  {searchQuery
-                    ? "No reviews matched your search criteria."
-                    : "You haven't run any code reviews yet. Start by analyzing a file or project."}
-                </p>
-                <button className="btn-primary" onClick={() => navigate("/review")}>
-                  Analyze Code Now
+          ) : (
+            <div>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "16px" }}>
+                <h3 style={{ fontSize: "18px" }}>Recent Review Activity</h3>
+                <button className="btn-secondary" onClick={() => setActiveTab("reviews")}>
+                  View All ({history.length}) →
                 </button>
               </div>
-            ) : (
-              <div className="reviews-cards-list">
-                {filteredReviews.map((item) => (
+
+              <div style={{ display: "flex", flexDirection: "column", gap: "14px" }}>
+                {history.slice(0, 5).map((rev) => (
                   <div
-                    key={item.id}
-                    className="review-history-card"
-                    onClick={() => setSelectedReview(item)}
+                    key={rev.id}
+                    className="capability-card"
+                    style={{ cursor: "pointer", justifyContent: "space-between", alignItems: "center" }}
+                    onClick={() => setSelectedReview(rev)}
                   >
-                    <div className="card-top-row">
-                      <div className="card-title-group">
-                        <span className="card-proj-name">{item.projectName}</span>
-                        <span className="lang-tag">{item.language}</span>
-                      </div>
-
-                      <div className="card-metrics-group">
-                        {item.score !== null && (
-                          <span className="score-pill">
-                            ★ Score: {item.score}/100
-                          </span>
-                        )}
-                        <span className="date-text">{formatDate(item.createdAt)}</span>
+                    <div>
+                      <strong style={{ fontSize: "16px", color: "var(--text-primary)" }}>{rev.projectName}</strong>
+                      <div style={{ fontSize: "13px", color: "var(--text-muted)", marginTop: "4px" }}>
+                        {rev.language} • {rev.issueCount} issues • {formatDate(rev.createdAt)}
                       </div>
                     </div>
 
-                    <div className="card-question-box">
-                      <strong>Question:</strong> {item.question}
-                    </div>
-
-                    <div className="card-issues-row">
-                      <span className="issue-chip red">🐞 {item.bugs} Bugs</span>
-                      <span className="issue-chip amber">🛡️ {item.security} Security</span>
-                      <span className="issue-chip blue">⚡ {item.performance} Perf</span>
-                      <span className="issue-chip green">✨ {item.quality} Quality</span>
-                    </div>
-
-                    <div className="card-bottom-actions">
+                    <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
+                      {rev.score !== null && (
+                        <span
+                          className="meta-badge"
+                          style={{
+                            fontSize: "14px",
+                            fontWeight: 700,
+                            backgroundColor: rev.score >= 80 ? "var(--success-bg)" : rev.score >= 60 ? "var(--warning-bg)" : "var(--danger-bg)",
+                            color: rev.score >= 80 ? "var(--success)" : rev.score >= 60 ? "var(--warning)" : "var(--danger)",
+                            border: `1px solid ${rev.score >= 80 ? "rgba(16, 185, 129, 0.3)" : rev.score >= 60 ? "rgba(245, 158, 11, 0.3)" : "rgba(239, 68, 68, 0.3)"}`
+                          }}
+                        >
+                          Score: {rev.score}/100
+                        </span>
+                      )}
                       <button
                         type="button"
-                        className="btn-reopen-primary"
+                        className="btn-secondary"
+                        style={{ padding: "6px 12px", fontSize: "13px" }}
                         onClick={(e) => {
                           e.stopPropagation();
-                          setSelectedReview(item);
+                          setSelectedReview(rev);
                         }}
                       >
-                        🔍 Reopen Past Review
-                      </button>
-
-                      <button
-                        type="button"
-                        className="btn-delete-icon"
-                        onClick={(e) => handleDeleteReview(item.id, e)}
-                        title="Delete Review"
-                      >
-                        🗑️ Delete
+                        Inspect
                       </button>
                     </div>
                   </div>
                 ))}
               </div>
-            )}
-          </div>
-        )}
-
-        {/* TAB 3: UPLOADED FILES */}
-        {activeTab === "files" && (
-          <div className="dashboard-tab-content">
-            <div className="files-section-header">
-              <div>
-                <h3>User Uploaded Files</h3>
-                <p>All source code files and ZIP archives stored and indexed in SQLite.</p>
-              </div>
-              <button className="btn-primary" onClick={() => navigate("/")}>
-                Upload New Files 📤
-              </button>
             </div>
+          )}
+        </div>
+      )}
 
-            {files.length === 0 ? (
-              <div className="files-empty-box">
-                <div className="empty-icon">📁</div>
-                <h3>No Uploaded Files Yet</h3>
-                <p>When you upload ZIP projects or source files, they are safely registered and tracked here.</p>
-                <button className="btn-primary" onClick={() => navigate("/")}>
-                  Go to Project Uploader
-                </button>
-              </div>
-            ) : (
-              <div className="files-table-wrapper">
-                <table className="files-table">
-                  <thead>
-                    <tr>
-                      <th>File Name</th>
-                      <th>Type</th>
-                      <th>Size</th>
-                      <th>Uploaded Date</th>
-                      <th>Actions</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {files.map((file) => (
-                      <tr key={file.id}>
-                        <td className="file-name-cell">
-                          <span className="file-icon">
-                            {file.file_type === "zip" ? "📦" : "📄"}
-                          </span>
-                          <span>{file.file_name}</span>
-                        </td>
-                        <td>
-                          <span className="type-badge">
-                            {file.file_type || "code"}
-                          </span>
-                        </td>
-                        <td>{formatFileSize(file.file_size)}</td>
-                        <td>{formatDate(file.upload_time)}</td>
-                        <td>
-                          <div className="file-actions">
-                            <button
-                              type="button"
-                              className="btn-analyze-mini"
-                              onClick={() => navigate("/review")}
-                            >
-                              Analyze
-                            </button>
-                            <button
-                              type="button"
-                              className="btn-delete-mini"
-                              onClick={() => handleDeleteFile(file.id)}
-                            >
-                              Delete
-                            </button>
-                          </div>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            )}
+      {/* TAB 2: REVIEWS */}
+      {activeTab === "reviews" && (
+        <div>
+          <div style={{ marginBottom: "18px" }}>
+            <input
+              type="text"
+              placeholder="Search reviews by project, question, or language..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              style={{ width: "100%", maxWidth: "400px" }}
+            />
           </div>
-        )}
 
-        {/* TAB 4: PROFILE & SETTINGS */}
-        {activeTab === "settings" && (
-          <div className="dashboard-tab-content">
-            <div className="settings-grid">
-              {/* Profile Card */}
-              <div className="settings-card">
-                <h3>👤 Profile Information</h3>
-                <p className="card-sub">Authenticated details linked via Clerk.</p>
-
-                <div className="profile-display-box">
-                  {user?.imageUrl ? (
-                    <img src={user.imageUrl} alt="Avatar" className="profile-large-avatar" />
-                  ) : (
-                    <div className="profile-large-placeholder">
-                      {(user?.fullName || user?.email || "U")[0].toUpperCase()}
+          {filteredReviews.length === 0 ? (
+            <div className="empty-state">
+              <div className="empty-icon">🔍</div>
+              <h3>No Reviews Found</h3>
+              <p>No past reviews match your query.</p>
+            </div>
+          ) : (
+            <div style={{ display: "flex", flexDirection: "column", gap: "14px" }}>
+              {filteredReviews.map((rev) => (
+                <div
+                  key={rev.id}
+                  className="capability-card"
+                  style={{ cursor: "pointer", justifyContent: "space-between", alignItems: "center" }}
+                  onClick={() => setSelectedReview(rev)}
+                >
+                  <div style={{ flex: 1 }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "4px" }}>
+                      <strong style={{ fontSize: "17px", color: "var(--text-primary)" }}>{rev.projectName}</strong>
+                      <span className="meta-badge">{rev.language}</span>
+                      {rev.score !== null && (
+                        <span className="meta-badge" style={{ backgroundColor: "var(--success-bg)", color: "var(--success)" }}>
+                          Score: {rev.score}/100
+                        </span>
+                      )}
                     </div>
-                  )}
-
-                  <div className="profile-meta-fields">
-                    <div className="field-group">
-                      <label>Full Name</label>
-                      <span className="field-value">{user?.fullName || "Developer"}</span>
+                    <div style={{ fontSize: "14px", color: "var(--text-secondary)" }}>
+                      Query: "{rev.question}"
                     </div>
-
-                    <div className="field-group">
-                      <label>Email Address</label>
-                      <span className="field-value">{user?.email || "No email"}</span>
-                    </div>
-
-                    <div className="field-group">
-                      <label>Clerk User ID</label>
-                      <span className="field-value mono">{user?.id || "Local User"}</span>
-                    </div>
-
-                    <div className="field-group">
-                      <label>Authentication Provider</label>
-                      <span className="field-value">
-                        {isClerkConfigured ? "Clerk Security Cloud" : "Local Developer Session"}
-                      </span>
+                    <div style={{ fontSize: "12.5px", color: "var(--text-muted)", marginTop: "4px" }}>
+                      {formatDate(rev.createdAt)} • {rev.bugs} Bugs • {rev.security} Security • {rev.performance} Perf • {rev.quality} Quality
                     </div>
                   </div>
-                </div>
-              </div>
 
-              {/* Theme Preference Settings */}
-              <div className="settings-card">
-                <h3>🎨 Workspace Theme Preference</h3>
-                <p className="card-sub">Select your active visual theme. Persists across browser refreshes and syncs to SQLite.</p>
-
-                <div className="themes-quick-selector">
-                  {themes.map((t) => {
-                    const isSelected = theme === t.id;
-                    return (
-                      <div
-                        key={t.id}
-                        className={`theme-pill-select ${isSelected ? "selected" : ""}`}
-                        onClick={() => setTheme(t.id)}
-                      >
-                        <span className="theme-color-dot" style={{ backgroundColor: t.primaryColor }}></span>
-                        <div>
-                          <strong>{t.name}</strong>
-                          <span className="theme-pill-sub">{t.subtitle}</span>
-                        </div>
-                        {isSelected && <span className="check-mark">✓</span>}
-                      </div>
-                    );
-                  })}
+                  <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                    <button
+                      type="button"
+                      className="btn-secondary"
+                      style={{ padding: "6px 14px", fontSize: "13px" }}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setSelectedReview(rev);
+                      }}
+                    >
+                      View Report
+                    </button>
+                    <button
+                      type="button"
+                      className="btn-secondary"
+                      style={{ padding: "6px 10px", fontSize: "13px", color: "var(--danger)" }}
+                      onClick={(e) => handleDeleteReview(rev.id, e)}
+                    >
+                      Delete
+                    </button>
+                  </div>
                 </div>
-
-                <div style={{ marginTop: "16px" }}>
-                  <button className="btn-secondary" onClick={() => navigate("/themes")}>
-                    Open Full Themes Customizer →
-                  </button>
-                </div>
-              </div>
+              ))}
             </div>
-          </div>
-        )}
-      </div>
+          )}
+        </div>
+      )}
 
-      {/* REOPEN PAST REVIEW MODAL */}
+      {/* TAB 3: FILES */}
+      {activeTab === "files" && (
+        <div>
+          {files.length === 0 ? (
+            <div className="empty-state">
+              <div className="empty-icon">📁</div>
+              <h3>No Files Tracked</h3>
+              <p>Uploaded archives and scripts will appear here.</p>
+              <button className="btn-primary" onClick={() => navigate("/")}>
+                Upload Code →
+              </button>
+            </div>
+          ) : (
+            <div className="files-table-wrapper">
+              <table className="files-table">
+                <thead>
+                  <tr>
+                    <th>File Name</th>
+                    <th>Type</th>
+                    <th>Size</th>
+                    <th>Uploaded Date</th>
+                    <th>Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {files.map((file) => (
+                    <tr key={file.id}>
+                      <td>
+                        <strong>{file.file_name}</strong>
+                      </td>
+                      <td>
+                        <span className="meta-badge">{file.file_type || "code"}</span>
+                      </td>
+                      <td>{formatFileSize(file.file_size)}</td>
+                      <td>{formatDate(file.upload_time)}</td>
+                      <td>
+                        <div style={{ display: "flex", gap: "8px" }}>
+                          <button
+                            type="button"
+                            className="btn-secondary"
+                            style={{ padding: "4px 10px", fontSize: "12px" }}
+                            onClick={() => navigate("/review")}
+                          >
+                            Analyze
+                          </button>
+                          <button
+                            type="button"
+                            className="btn-secondary"
+                            style={{ padding: "4px 10px", fontSize: "12px", color: "var(--danger)" }}
+                            onClick={() => handleDeleteFile(file.id)}
+                          >
+                            Delete
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* INSPECT REVIEW MODAL */}
       {selectedReview && (
         <ReviewModal
           reviewData={selectedReview}

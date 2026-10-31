@@ -1,4 +1,4 @@
-import shutil
+import uuid
 from pathlib import Path
 
 from fastapi import HTTPException, UploadFile
@@ -76,9 +76,8 @@ class DocxHandler:
             file.filename
         ).name
 
-        doc_path = (
-            self.upload_dir / safe_filename
-        )
+        upload_id = uuid.uuid4().hex
+        doc_path = self.upload_dir / f"{upload_id}_{safe_filename}"
 
         total_bytes = 0
 
@@ -180,12 +179,7 @@ class DocxHandler:
         # Save extracted text as source file
         # ========================================================
 
-        project_folder = (
-            self.upload_dir / "doc_project"
-        )
-
-        if project_folder.exists():
-            shutil.rmtree(project_folder)
+        project_folder = self.upload_dir / f"doc_project_{upload_id}"
 
         project_folder.mkdir(
             parents=True,
@@ -238,7 +232,7 @@ class DocxHandler:
         return {
             "project_folder": project_folder,
             "file_name": output_filename,
-            "char_count": len(extracted_text)
+            "char_count": len(extracted_text),
         }
 
     # ============================================================

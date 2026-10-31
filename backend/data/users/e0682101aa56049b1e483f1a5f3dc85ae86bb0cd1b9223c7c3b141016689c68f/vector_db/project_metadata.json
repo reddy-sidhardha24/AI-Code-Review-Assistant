@@ -1,0 +1,20 @@
+{
+    "project_name": "javatest1",
+    "total_files": 1,
+    "total_lines": 31,
+    "languages": {
+        "Java": {
+            "files": 1,
+            "lines": 31
+        }
+    },
+    "files": [
+        {
+            "name": "javatest1.java",
+            "path": "javatest1.java",
+            "extension": ".java",
+            "language": "Java",
+            "lines": 31
+        }
+    ]
+}

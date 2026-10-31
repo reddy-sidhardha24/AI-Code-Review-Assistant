@@ -1,4 +1,3 @@
-import shutil
 from pathlib import Path
 from typing import List
 
@@ -70,8 +69,8 @@ class FileHandler:
         ".md",
     }
 
-    # Maximum file size: 5 MB per file
-    MAX_FILE_SIZE = 5 * 1024 * 1024
+    # Keep in sync with the API-level source-file limit.
+    MAX_FILE_SIZE = 10 * 1024 * 1024
 
     # Maximum number of files
     MAX_FILE_COUNT = 50
@@ -103,15 +102,11 @@ class FileHandler:
             )
 
         # ========================================================
-        # Prepare project folder — full clean reset
+        # Use a unique project folder so uploads never erase prior submissions.
         # ========================================================
 
-        project_folder = (
-            self.upload_dir / "temp_project"
-        )
-
-        if project_folder.exists():
-            shutil.rmtree(project_folder)
+        import uuid
+        project_folder = self.upload_dir / f"temp_project_{uuid.uuid4().hex}"
 
         project_folder.mkdir(
             parents=True,
@@ -124,6 +119,7 @@ class FileHandler:
 
         saved_files = []
         skipped_files = []
+        seen_names = set()
 
         for file in files:
 
@@ -170,7 +166,7 @@ class FileHandler:
                         f"File too large: "
                         f"{file.filename} "
                         f"({len(content) / 1024 / 1024:.1f} MB). "
-                        f"Maximum is 5 MB per file."
+                        f"Maximum is 10 MB per file."
                     )
                 )
 
@@ -181,6 +177,13 @@ class FileHandler:
             safe_name = Path(
                 file.filename
             ).name
+
+            if safe_name.casefold() in seen_names:
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"Duplicate filename in this upload: {safe_name}",
+                )
+            seen_names.add(safe_name.casefold())
 
             file_path = (
                 project_folder / safe_name

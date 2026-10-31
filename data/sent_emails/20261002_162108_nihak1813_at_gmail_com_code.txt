@@ -1,0 +1,21 @@
+# ============================================================
+# File: corrected_rockpaper.py
+# ============================================================
+# ============================================================
+# Refactored Code with Applied Fixes: rockpaper.py
+# ============================================================
+
+# Fix for: Hard‑coded prompt strings (Severity: LOW)
+WELCOME_MSG = "--- Welcome to Rock, Paper, Scissors! ---"
+print(WELCOME_MSG)
+
+
+# Fix for: Encapsulate game logic in functions (Severity: LOW)
+def main():
+    import random
+    choices = ["rock", "paper", "scissors"]
+    print("--- Welcome to Rock, Paper, Scissors! ---")
+    ...
+
+if __name__ == "__main__":
+    main()

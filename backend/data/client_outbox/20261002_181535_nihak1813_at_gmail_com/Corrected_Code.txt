@@ -1,0 +1,45 @@
+# ============================================================
+# File: corrected_weatherapi.py
+# ============================================================
+# ============================================================
+# Refactored Code with Applied Fixes: weatherapi.py
+# ============================================================
+
+# Fix for: Hardcoded API Key Exposure (Severity: HIGH)
+import os
+API_KEY = os.getenv("OPENWEATHER_API_KEY")
+if not API_KEY:
+    raise RuntimeError("OpenWeatherMap API key not set in environment variable 'OPENWEATHER_API_KEY'.")
+
+
+# Fix for: Missing Main Guard (Severity: MEDIUM)
+def main():
+    city = input("Enter city name: ")
+    params = {
+        'q': city,
+        'appid': API_KEY,
+        'units': 'metric'
+    }
+    response = requests.get(BASE_URL, params=params)
+    data = response.json()
+    if data.get("cod") != 200:
+        print("Error:", data.get("message", "Something went wrong"))
+    else:
+        weather = data['weather'][0]['description']
+        temp = data['main']['temp']
+        print(f"\nWeather in {city.title()}:")
+        print(f"Condition: {weather}")
+        print(f"Temperature: {temp}°C")
+
+if __name__ == "__main__":
+    main()
+
+
+# Fix for: Add Exception Handling for Network Errors (Severity: MEDIUM)
+try:
+    response = requests.get(BASE_URL, params=params)
+    response.raise_for_status()
+    data = response.json()
+except requests.RequestException as e:
+    print("Network error:", e)
+    exit(1)

@@ -2,9 +2,9 @@
 # backend/models/review_models.py
 # ============================================================
 
-from typing import List, Optional, Literal
+from typing import List, Optional, Literal, Dict, Any
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 
 # ============================================================
@@ -18,7 +18,10 @@ class ReviewRequest(BaseModel):
         max_length=2000
     )
 
-    model: Optional[str] = None
+    category: Optional[str] = Field(
+        default=None,
+        description="Review category: 'bugs', 'security', 'performance', 'code_quality', or 'full_review'"
+    )
 
 
 # ============================================================
@@ -100,22 +103,22 @@ class BugFinding(BaseModel):
         "possible_risk"
     ]
 
-    severity: Literal["critical", "high", "medium", "low"] = "high"
-    file: str = "main.py"
+    severity: Literal["critical", "high", "medium", "low"]
+    file: str
 
     line: Optional[int] = None
 
     line_range: Optional[str] = None
 
-    evidence: str = ""
+    evidence: str
 
-    description: str = ""
+    description: str
 
     explanation: Optional[str] = None
 
-    impact: str = ""
+    impact: str
 
-    fix: str = ""
+    fix: str
 
     suggested_solution: Optional[str] = None
 
@@ -128,7 +131,6 @@ class BugFinding(BaseModel):
     reason_for_correction: Optional[str] = None
 
     confidence: int = Field(
-        default=85,
         ge=0,
         le=100
     )
@@ -140,27 +142,27 @@ class BugFinding(BaseModel):
 
 class ErrorFinding(BaseModel):
 
-    type: str = "runtime_error"
+    type: str
 
-    title: str = "Detected Error"
+    title: str
 
-    file: str = "main.py"
+    file: str
 
-    line: Optional[int] = None
+    line: Optional[int]
 
-    line_range: Optional[str] = None
+    line_range: Optional[str]
 
-    evidence: str = ""
+    evidence: str
 
-    description: str = ""
+    description: str
 
     explanation: Optional[str] = None
 
     severity: Literal["critical", "high", "medium", "low"] = "high"
 
-    impact: str = ""
+    impact: str
 
-    fix: str = ""
+    fix: str
 
     suggested_solution: Optional[str] = None
 
@@ -173,7 +175,6 @@ class ErrorFinding(BaseModel):
     reason_for_correction: Optional[str] = None
 
     confidence: int = Field(
-        default=85,
         ge=0,
         le=100
     )
@@ -185,9 +186,9 @@ class ErrorFinding(BaseModel):
 
 class PerformanceIssue(BaseModel):
 
-    title: str = "Performance Concern"
+    title: str
 
-    description: str = ""
+    description: str
 
     explanation: Optional[str] = None
 
@@ -236,9 +237,9 @@ class PerformanceInfo(BaseModel):
 
 class SecurityFinding(BaseModel):
 
-    title: str = "Security Finding"
+    title: str
 
-    description: str = ""
+    description: str
 
     explanation: Optional[str] = None
 
@@ -295,6 +296,15 @@ class SecurityInfo(BaseModel):
         default_factory=list
     )
 
+    @field_validator("issues_found", mode="before")
+    @classmethod
+    def coerce_issues_found(cls, v):
+        if isinstance(v, bool):
+            return 1 if v else 0
+        if isinstance(v, (int, float)):
+            return int(v)
+        return 0
+
 
 # ============================================================
 # CODE QUALITY FINDING
@@ -302,9 +312,9 @@ class SecurityInfo(BaseModel):
 
 class CodeQualityFinding(BaseModel):
 
-    title: str = "Code Quality Finding"
+    title: str = "Code Quality Note"
 
-    description: str = ""
+    description: str
 
     explanation: Optional[str] = None
 
@@ -361,6 +371,27 @@ class CodeQualityInfo(BaseModel):
     ] = Field(
         default_factory=list
     )
+
+    @field_validator("observations", "suggestions", mode="before")
+    @classmethod
+    def coerce_findings(cls, v):
+        if isinstance(v, str):
+            return [{"title": "Code Quality Note", "description": v, "severity": "low"}]
+        if isinstance(v, list):
+            res = []
+            for item in v:
+                if isinstance(item, str):
+                    res.append({"title": "Code Quality Note", "description": item, "severity": "low"})
+                elif isinstance(item, dict):
+                    if "title" not in item:
+                        item["title"] = "Code Quality Note"
+                    if "description" not in item:
+                        item["description"] = item.get("title", "Observation")
+                    res.append(item)
+                else:
+                    res.append(item)
+            return res
+        return []
 
 
 # ============================================================
@@ -488,6 +519,10 @@ class StructuredReview(BaseModel):
         CodeQualityInfo
     ] = None
 
+    best_practices: Optional[
+        List[DetectedIssue]
+    ] = None
+
     # --------------------------------------------------------
     # CORRECTED CODE
     # --------------------------------------------------------
@@ -517,3 +552,27 @@ class StructuredReview(BaseModel):
     )
 
     final_verdict: str
+
+
+# ============================================================
+# SEND EMAIL REQUEST
+# ============================================================
+
+class SendEmailRequest(BaseModel):
+
+    email: str = Field(
+        min_length=3,
+        max_length=255
+    )
+
+    category: Optional[str] = Field(
+        default="full_review"
+    )
+
+    review_id: Optional[str] = None
+
+    review_data: Optional[Dict[str, Any]] = None
+
+    report_markdown: Optional[str] = None
+
+    corrected_code: Optional[List[Dict[str, Any]]] = None

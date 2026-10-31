@@ -1,0 +1,12 @@
+# ============================================================
+# File: corrected_rockpaper.py
+# ============================================================
+# ============================================================
+# Refactored Code with Applied Fixes: rockpaper.py
+# ============================================================
+
+# Fix for: Encapsulate game logic into functions (Severity: LOW)
+def play_round(round_num, total_rounds, player_score, computer_score):
+    ...
+for round_num in range(1, total_rounds+1):
+    player_score, computer_score = play_round(round_num, total_rounds, player_score, computer_score)

@@ -37,7 +37,17 @@ const SignInPage: React.FC = () => {
       <div className="auth-card-container">
         {isClerkConfigured ? (
           <div className="clerk-widget-wrapper">
-            <SignIn routing="path" path="/sign-in" signUpUrl="/sign-up" />
+            <SignIn
+              routing="path"
+              path="/sign-in"
+              signUpUrl="/sign-up"
+              appearance={{
+                elements: {
+                  rootBox: "clerk-auth-root",
+                  cardBox: "clerk-auth-cardbox"
+                }
+              }}
+            />
           </div>
         ) : (
           <div className="auth-card">

@@ -1,0 +1,42 @@
+{
+    "project_name": "student_management_system",
+    "total_files": 3,
+    "total_lines": 120,
+    "languages": {
+        "Python": {
+            "files": 1,
+            "lines": 46
+        },
+        "HTML": {
+            "files": 1,
+            "lines": 30
+        },
+        "JavaScript": {
+            "files": 1,
+            "lines": 44
+        }
+    },
+    "files": [
+        {
+            "name": "app.py",
+            "path": "app.py",
+            "extension": ".py",
+            "language": "Python",
+            "lines": 46
+        },
+        {
+            "name": "index.html",
+            "path": "index.html",
+            "extension": ".html",
+            "language": "HTML",
+            "lines": 30
+        },
+        {
+            "name": "script.js",
+            "path": "script.js",
+            "extension": ".js",
+            "language": "JavaScript",
+            "lines": 44
+        }
+    ]
+}
