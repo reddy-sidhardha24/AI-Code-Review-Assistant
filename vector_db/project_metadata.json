@@ -1,0 +1,89 @@
+{
+    "project_name": "rock-paper-scisors",
+    "total_files": 8,
+    "total_lines": 272,
+    "languages": {
+        "Markdown": {
+            "files": 1,
+            "lines": 15
+        },
+        "Python": {
+            "files": 1,
+            "lines": 111
+        },
+        "HTML": {
+            "files": 1,
+            "lines": 8
+        },
+        "JSON": {
+            "files": 1,
+            "lines": 17
+        },
+        "JavaScript": {
+            "files": 3,
+            "lines": 117
+        },
+        "CSS": {
+            "files": 1,
+            "lines": 4
+        }
+    },
+    "files": [
+        {
+            "name": "README.md",
+            "path": "README.md",
+            "extension": ".md",
+            "language": "Markdown",
+            "lines": 15
+        },
+        {
+            "name": "app.py",
+            "path": "backend\\app.py",
+            "extension": ".py",
+            "language": "Python",
+            "lines": 111
+        },
+        {
+            "name": "index.html",
+            "path": "frontend\\index.html",
+            "extension": ".html",
+            "language": "HTML",
+            "lines": 8
+        },
+        {
+            "name": "package.json",
+            "path": "frontend\\package.json",
+            "extension": ".json",
+            "language": "JSON",
+            "lines": 17
+        },
+        {
+            "name": "vite.config.js",
+            "path": "frontend\\vite.config.js",
+            "extension": ".js",
+            "language": "JavaScript",
+            "lines": 4
+        },
+        {
+            "name": "App.css",
+            "path": "frontend\\src\\App.css",
+            "extension": ".css",
+            "language": "CSS",
+            "lines": 4
+        },
+        {
+            "name": "App.jsx",
+            "path": "frontend\\src\\App.jsx",
+            "extension": ".jsx",
+            "language": "JavaScript",
+            "lines": 107
+        },
+        {
+            "name": "main.jsx",
+            "path": "frontend\\src\\main.jsx",
+            "extension": ".jsx",
+            "language": "JavaScript",
+            "lines": 6
+        }
+    ]
+}

@@ -1,0 +1,4 @@
+# Refactored / Corrected Snippets:
+
+# --- Fix for: Direct State Mutation in React (frontend\src\App.jsx) ---
+setScore(prev => ({ ...prev, [data.result + "s"]: prev[data.result + "s"] + 1 }));

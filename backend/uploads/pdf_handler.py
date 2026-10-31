@@ -1,4 +1,4 @@
-import shutil
+import uuid
 from pathlib import Path
 
 from fastapi import HTTPException, UploadFile
@@ -75,9 +75,8 @@ class PdfHandler:
             file.filename
         ).name
 
-        pdf_path = (
-            self.upload_dir / safe_filename
-        )
+        upload_id = uuid.uuid4().hex
+        pdf_path = self.upload_dir / f"{upload_id}_{safe_filename}"
 
         total_bytes = 0
 
@@ -186,12 +185,7 @@ class PdfHandler:
         # Save extracted text as source file
         # ========================================================
 
-        project_folder = (
-            self.upload_dir / "pdf_project"
-        )
-
-        if project_folder.exists():
-            shutil.rmtree(project_folder)
+        project_folder = self.upload_dir / f"pdf_project_{upload_id}"
 
         project_folder.mkdir(
             parents=True,
@@ -250,5 +244,5 @@ class PdfHandler:
             "project_folder": project_folder,
             "file_name": output_filename,
             "page_count": page_count,
-            "char_count": len(extracted_text)
+            "char_count": len(extracted_text),
         }

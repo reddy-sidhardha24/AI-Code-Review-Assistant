@@ -1,0 +1,5 @@
+# Refactored / Corrected Snippets:
+
+# --- Fix for: SQL Query Not Executed (jstest1.ts) ---
+// Remove unused SQL query and exec call if not needed
+// Or implement database query if intended

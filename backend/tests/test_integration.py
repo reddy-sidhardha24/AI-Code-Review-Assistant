@@ -4,7 +4,12 @@
 # ============================================================
 
 import sys
+import os
 from pathlib import Path
+
+# This integration harness supplies test identity headers and must run in the
+# explicit local development auth mode; production requests require Clerk JWTs.
+os.environ.setdefault("APP_ENV", "development")
 
 # Add backend directory to sys.path
 BACKEND_DIR = Path(__file__).resolve().parent.parent

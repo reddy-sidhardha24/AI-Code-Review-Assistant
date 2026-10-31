@@ -5,6 +5,7 @@
 import os
 import shutil
 import zipfile
+import uuid
 from pathlib import Path
 from typing import List
 
@@ -92,6 +93,10 @@ class UploadService:
         ".yml",
         ".md"
     }
+
+    MAX_ARCHIVE_ENTRIES = 5000
+    MAX_ARCHIVE_FILE_SIZE = 10 * 1024 * 1024
+    MAX_ARCHIVE_TOTAL_SIZE = 500 * 1024 * 1024
 
     # ========================================================
     # HELPER: SAFE ZIP PATH
@@ -194,25 +199,12 @@ class UploadService:
             original_name
         ).stem
 
-        zip_path = (
-            self.upload_dir
-            / original_name
-        )
+        upload_id = uuid.uuid4().hex
+        zip_path = self.upload_dir / f"{upload_id}.zip"
 
-        project_folder = (
-            self.extract_dir
-            / project_name
-        )
-
-        # ----------------------------------------------------
-        # Remove previous project with same name
-        # ----------------------------------------------------
-
-        if project_folder.exists():
-
-            shutil.rmtree(
-                project_folder
-            )
+        # Use a per-upload folder so two users uploading archives with the
+        # same filename cannot delete or overwrite one another's extracted data.
+        project_folder = self.extract_dir / f"{project_name}_{upload_id}"
 
         project_folder.mkdir(
             parents=True,
@@ -267,7 +259,29 @@ class UploadService:
             "r"
         ) as archive:
 
-            for member in archive.infolist():
+            members = archive.infolist()
+            if len(members) > self.MAX_ARCHIVE_ENTRIES:
+                zip_path.unlink(missing_ok=True)
+                raise ValueError(
+                    f"ZIP contains too many entries (maximum {self.MAX_ARCHIVE_ENTRIES})."
+                )
+
+            declared_total_size = 0
+            for member in members:
+                if member.is_dir():
+                    continue
+                if member.file_size > self.MAX_ARCHIVE_FILE_SIZE:
+                    zip_path.unlink(missing_ok=True)
+                    raise ValueError(
+                        f"ZIP entry exceeds the {self.MAX_ARCHIVE_FILE_SIZE // (1024 * 1024)} MB per-file limit."
+                    )
+                declared_total_size += member.file_size
+            if declared_total_size > self.MAX_ARCHIVE_TOTAL_SIZE:
+                zip_path.unlink(missing_ok=True)
+                raise ValueError("ZIP expands beyond the 500 MB project limit.")
+
+            extracted_total_size = 0
+            for member in members:
 
                 # Ignore directories
                 if member.is_dir():
@@ -295,11 +309,14 @@ class UploadService:
                         target_path,
                         "wb"
                     ) as target:
-
-                        shutil.copyfileobj(
-                            source,
-                            target
-                        )
+                        while True:
+                            chunk = source.read(1024 * 1024)
+                            if not chunk:
+                                break
+                            extracted_total_size += len(chunk)
+                            if extracted_total_size > self.MAX_ARCHIVE_TOTAL_SIZE:
+                                raise ValueError("ZIP expands beyond the 500 MB project limit.")
+                            target.write(chunk)
 
         # ----------------------------------------------------
         # Remove uploaded ZIP after extraction
@@ -388,20 +405,8 @@ class UploadService:
                 "No files were provided."
             )
 
-        project_name = (
-            "uploaded_files"
-        )
-
-        project_folder = (
-            self.upload_dir
-            / project_name
-        )
-
-        if project_folder.exists():
-
-            shutil.rmtree(
-                project_folder
-            )
+        project_name = "uploaded_files"
+        project_folder = self.upload_dir / f"{project_name}_{uuid.uuid4().hex}"
 
         project_folder.mkdir(
             parents=True,
@@ -513,9 +518,8 @@ class UploadService:
         """
         Store pasted source code as a new standalone project.
 
-        Every paste operation represents a NEW project.
-        Previous pasted files are removed before creating
-        and indexing the new source file.
+        Every paste operation gets its own directory so concurrent or
+        different users' submissions cannot overwrite each other.
         """
 
         # ========================================================
@@ -536,23 +540,7 @@ class UploadService:
         # PASTED CODE PROJECT DIRECTORY
         # ========================================================
 
-        project_folder = (
-            self.upload_dir / "pasted_code"
-        )
-
-        # ========================================================
-        # REMOVE PREVIOUS PASTE PROJECT
-        # ========================================================
-
-        if project_folder.exists():
-
-            print(
-                "\nRemoving previous pasted-code project..."
-            )
-
-            shutil.rmtree(
-                project_folder
-            )
+        project_folder = self.upload_dir / f"pasted_code_{uuid.uuid4().hex}"
 
         # ========================================================
         # CREATE FRESH PROJECT DIRECTORY

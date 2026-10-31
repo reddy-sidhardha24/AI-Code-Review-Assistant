@@ -50,7 +50,7 @@ class UploadService:
             upload_dir
         )
 
-        # Shared RAG Pipeline
+        # Per-user RAG pipeline supplied by the application runtime.
         self.rag_pipeline = rag_pipeline
 
     # ============================================================
@@ -73,9 +73,7 @@ class UploadService:
             .build_vector_database(
                 str(
                     upload_result["project_folder"]
-                ),
-                input_type="zip",
-                original_filename=file.filename
+                )
             )
         )
 
@@ -108,6 +106,8 @@ class UploadService:
             "project_name": (
                 upload_result["project_name"]
             ),
+            "project_folder": str(upload_result["project_folder"]),
+            "files": upload_result.get("files", []),
             "file_count": file_count,
             "languages": languages,
             "metadata": metadata
@@ -128,15 +128,12 @@ class UploadService:
             )
         )
 
-        is_single = len(files) == 1
         metadata = (
             self.rag_pipeline
             .build_vector_database(
                 str(
                     upload_result["project_folder"]
-                ),
-                input_type="source_file" if is_single else "source_files",
-                original_filename=files[0].filename if is_single else "source_files.zip"
+                )
             )
         )
 
@@ -165,11 +162,10 @@ class UploadService:
                 f"uploaded and indexed successfully."
             ),
             "project_name": "uploaded_files",
+            "project_folder": str(upload_result["project_folder"]),
             "file_count": len(saved_files),
             "files": saved_files,
             "languages": languages,
-            "input_type": "source_file" if is_single else "source_files",
-            "original_filename": files[0].filename if is_single else "source_files.zip",
             "metadata": metadata
         }
 
@@ -195,9 +191,7 @@ class UploadService:
             .build_vector_database(
                 str(
                     upload_result["project_folder"]
-                ),
-                input_type="pasted_code",
-                original_filename=filename
+                )
             )
         )
 
@@ -208,11 +202,10 @@ class UploadService:
                 "successfully."
             ),
             "project_name": "pasted_code",
+            "project_folder": str(upload_result["project_folder"]),
             "file": (
                 upload_result["file_name"]
             ),
-            "input_type": "pasted_code",
-            "original_filename": filename,
             "metadata": metadata
         }
 
@@ -249,6 +242,7 @@ class UploadService:
                 f"{upload_result['page_count']} pages."
             ),
             "project_name": "pdf_project",
+            "project_folder": str(upload_result["project_folder"]),
             "file": upload_result["file_name"],
             "page_count": (
                 upload_result["page_count"]
@@ -350,6 +344,7 @@ class UploadService:
                 f"characters."
             ),
             "project_name": "doc_project",
+            "project_folder": str(upload_result["project_folder"]),
             "file": upload_result["file_name"],
             "metadata": metadata
         }

@@ -7,6 +7,20 @@ services:
       dockerfile: Dockerfile
     ports:
       - "8000:8000"
+    environment:
+      APP_ENV: production
     env_file:
-      - ./backend/.env
+      - path: ./backend/.env
+        required: false
+    volumes:
+      - app-data:/app/backend/data
+      - app-uploads:/app/backend/uploads
+      - app-extracted:/app/backend/extracted
+      - app-vector-db:/app/backend/vector_db
     restart: always
+
+volumes:
+  app-data:
+  app-uploads:
+  app-extracted:
+  app-vector-db:

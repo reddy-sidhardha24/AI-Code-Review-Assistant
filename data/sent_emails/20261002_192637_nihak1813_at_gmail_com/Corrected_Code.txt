@@ -1,0 +1,15 @@
+# ============================================================
+# File: corrected_rockpaper.py
+# ============================================================
+# ============================================================
+# Refactored Code with Applied Fixes: rockpaper.py
+# ============================================================
+
+# Fix for: Repeated Input Validation Loop (Severity: LOW)
+total_rounds = int(get_validated_input("How many rounds would you like to play? ", lambda x: x.isdigit() and int(x) > 0))
+
+
+# Fix for: Use Functions to Encapsulate Game Logic (Severity: LOW)
+while current_round <= total_rounds:
+    player_score, computer_score = play_round(current_round, total_rounds, player_score, computer_score)
+    current_round += 1

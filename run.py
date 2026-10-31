@@ -21,20 +21,51 @@ def build_frontend():
     print("============================================================")
     npm_cmd = "npm.cmd" if sys.platform == "win32" else "npm"
 
-    # Install frontend dependencies if needed
-    if not (FRONTEND_DIR / "node_modules").exists():
+    # Install dependencies when missing or out of sync with the lockfile.
+    lock_file = FRONTEND_DIR / "package-lock.json"
+    installed_lock = FRONTEND_DIR / "node_modules" / ".package-lock.json"
+    if (
+        not installed_lock.exists()
+        or (lock_file.exists() and lock_file.stat().st_mtime > installed_lock.stat().st_mtime)
+    ):
         print("Installing frontend dependencies...")
-        subprocess.run([npm_cmd, "install"], cwd=FRONTEND_DIR, check=True)
+        subprocess.run([npm_cmd, "ci"], cwd=FRONTEND_DIR, check=True)
 
     # Build frontend
     subprocess.run([npm_cmd, "run", "build"], cwd=FRONTEND_DIR, check=True)
     print("Frontend build complete!")
 
 
+def frontend_build_is_stale():
+    index_file = FRONTEND_BUILD_DIR / "index.html"
+    if not index_file.exists():
+        return True
+
+    built_at = index_file.stat().st_mtime
+    source_paths = [
+        FRONTEND_DIR / "src",
+        FRONTEND_DIR / "public",
+        FRONTEND_DIR / "package.json",
+        FRONTEND_DIR / "package-lock.json",
+        FRONTEND_DIR / ".env",
+    ]
+    for source_path in source_paths:
+        if source_path.is_file() and source_path.stat().st_mtime > built_at:
+            return True
+        if source_path.is_dir():
+            for path in source_path.rglob("*"):
+                if path.is_file() and path.stat().st_mtime > built_at:
+                    return True
+    return False
+
+
 def main():
+    # This launcher is for local development. Production launchers must use
+    # APP_ENV=production and configure Clerk JWT verification.
+    os.environ.setdefault("APP_ENV", "development")
     force_build = "--build" in sys.argv
 
-    if force_build or not FRONTEND_BUILD_DIR.exists():
+    if force_build or frontend_build_is_stale():
         build_frontend()
 
     print("============================================================")
@@ -50,7 +81,12 @@ def main():
     threading.Timer(1.5, lambda: webbrowser.open("http://localhost:8000")).start()
 
     sys.path.insert(0, str(BACKEND_DIR))
-    uvicorn.run("app:app", host="0.0.0.0", port=8000, reload=False, app_dir=str(BACKEND_DIR))
+    # Backend storage paths (uploads, extracted projects, and vector_db) are
+    # relative to the backend directory. Match the direct uvicorn and Docker
+    # launchers so running this script from the repository root uses the same data.
+    os.chdir(BACKEND_DIR)
+    # This launcher enables local development auth, so keep it off network interfaces.
+    uvicorn.run("app:app", host="127.0.0.1", port=8000, reload=False, app_dir=str(BACKEND_DIR))
 
 
 if __name__ == "__main__":

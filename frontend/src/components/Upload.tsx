@@ -12,8 +12,8 @@ type UploadType =
    CONSTANTS
    ============================================================ */
 
-// No file size limit for ZIP project uploads
-const MAX_FILE_SIZE = 5 * 1024 * 1024;
+const MAX_ZIP_SIZE = 50 * 1024 * 1024;
+const MAX_FILE_SIZE = 10 * 1024 * 1024;
 const MAX_FILE_COUNT = 50;
 
 const SOURCE_EXTENSIONS = [
@@ -49,7 +49,7 @@ function getExtension(name: string): string {
    COMPONENT
    ============================================================ */
 
-function Upload() {
+function Upload({ onComplete }: { onComplete: () => void }) {
   const navigate = useNavigate();
 
   const zipInputRef =
@@ -69,6 +69,15 @@ function Upload() {
 
   const [githubUrl, setGithubUrl] =
     useState("");
+
+  const [githubConnected, setGithubConnected] =
+    useState(false);
+
+  const [githubUsername, setGithubUsername] =
+    useState("");
+
+  const [githubRepos, setGithubRepos] =
+    useState<any[]>([]);
 
   const [filename, setFilename] =
     useState("main.py");
@@ -101,6 +110,30 @@ function Upload() {
   };
 
   /* ============================================================
+     CHECK GITHUB CONNECTION
+     ============================================================ */
+
+  const checkGitHub = useCallback(async () => {
+    try {
+      const res = await API.get("/api/github/status");
+      if (res.data?.connected) {
+        setGithubConnected(true);
+        setGithubUsername(res.data.username || "");
+        const reposRes = await API.get("/api/github/repos");
+        if (reposRes.data?.success && Array.isArray(reposRes.data.repositories)) {
+          setGithubRepos(reposRes.data.repositories);
+        }
+      } else {
+        setGithubConnected(false);
+        setGithubUsername("");
+        setGithubRepos([]);
+      }
+    } catch {
+      // not connected or offline
+    }
+  }, []);
+
+  /* ============================================================
      CHANGE UPLOAD MODE
      ============================================================ */
 
@@ -110,6 +143,9 @@ function Upload() {
     setUploadType(type);
     clearMessage();
     setStatus("");
+    if (type === "github") {
+      checkGitHub();
+    }
   };
 
   /* ============================================================
@@ -126,6 +162,14 @@ function Upload() {
         .endsWith(".zip")
     ) {
       return "Please select a valid ZIP file.";
+    }
+
+    if (file.size > MAX_ZIP_SIZE) {
+      return (
+        `ZIP file is too large ` +
+        `(${formatSize(file.size)}). ` +
+        `Maximum is 500 MB.`
+      );
     }
 
     if (file.size === 0) {
@@ -169,7 +213,7 @@ function Upload() {
         return (
           `File too large: ${file.name} ` +
           `(${formatSize(file.size)}). ` +
-          `Maximum is 5 MB per file.`
+          `Maximum is 25 MB per file.`
         );
       }
     }
@@ -229,14 +273,7 @@ function Upload() {
         );
         setMessageType("success");
 
-        localStorage.setItem("project_input_type", "pasted_code");
-        localStorage.setItem("project_filename", trimmedFilename);
-        localStorage.setItem("project_name", trimmedFilename);
-        localStorage.setItem("pasted_code_content", trimmedCode);
-
-        setTimeout(() => {
-          navigate("/review");
-        }, 1000);
+        onComplete();
       } catch (error: any) {
         setStatus("");
         setMessage(
@@ -293,16 +330,7 @@ function Upload() {
         );
         setMessageType("success");
 
-        localStorage.setItem("project_input_type", "zip");
-        const repoClean = trimmedUrl.replace(/\/+$/, "");
-        const repoName = repoClean.split("/").pop() || "github_project";
-        localStorage.setItem("project_filename", `${repoName}.zip`);
-        localStorage.setItem("project_name", repoName);
-        localStorage.removeItem("pasted_code_content");
-
-        setTimeout(() => {
-          navigate("/review");
-        }, 1000);
+        onComplete();
       } catch (error: any) {
         setStatus("");
         setMessage(
@@ -359,19 +387,6 @@ function Upload() {
               "Content-Type":
                 "multipart/form-data",
             },
-            onUploadProgress: (progressEvent) => {
-              if (progressEvent.total) {
-                const percent = Math.round(
-                  (progressEvent.loaded * 100) / progressEvent.total
-                );
-                setStatus(
-                  `Uploading ${zipFile.name} (${percent}% - ${formatSize(progressEvent.loaded)} of ${formatSize(progressEvent.total)})...`
-                );
-                if (percent >= 100) {
-                  setStatus("Extracting and indexing codebase (this may take a moment for large projects)...");
-                }
-              }
-            },
           }
         );
 
@@ -382,14 +397,7 @@ function Upload() {
         );
         setMessageType("success");
 
-        localStorage.setItem("project_input_type", "zip");
-        localStorage.setItem("project_filename", zipFile.name);
-        localStorage.setItem("project_name", zipFile.name.replace(/\.zip$/i, ""));
-        localStorage.removeItem("pasted_code_content");
-
-        setTimeout(() => {
-          navigate("/review");
-        }, 1000);
+        onComplete();
 
         return;
       }
@@ -443,15 +451,7 @@ function Upload() {
       );
       setMessageType("success");
 
-      const isSingle = files.length === 1;
-      localStorage.setItem("project_input_type", isSingle ? "source_file" : "source_files");
-      localStorage.setItem("project_filename", files[0].name);
-      localStorage.setItem("project_name", isSingle ? files[0].name : "uploaded_files");
-      localStorage.removeItem("pasted_code_content");
-
-      setTimeout(() => {
-        navigate("/review");
-      }, 1000);
+      onComplete();
     } catch (error: any) {
       setStatus("");
       setMessage(
@@ -631,34 +631,6 @@ print(divide(10, 0))`
       <div className="upload-box">
 
         {/* ======================================================
-            HEADER
-            ====================================================== */}
-
-        <div className="upload-icon">
-          {uploadType === "paste"
-            ? "</>"
-            : uploadType === "github"
-            ? "⚡"
-            : "↑"}
-        </div>
-
-        <h2>
-          {uploadType === "paste"
-            ? "Paste your code"
-            : uploadType === "github"
-            ? "Analyze GitHub repository"
-            : "Analyze your codebase"}
-        </h2>
-
-        <p>
-          {uploadType === "paste"
-            ? "Quickly analyze a source file with AI-powered code review."
-            : uploadType === "github"
-            ? "Enter a public GitHub repository URL to analyze."
-            : "Upload a complete project, select source files, or paste code."}
-        </p>
-
-        {/* ======================================================
             MODE TABS
             ====================================================== */}
 
@@ -676,7 +648,9 @@ print(divide(10, 0))`
             }
             disabled={loading}
           >
-            <span>ZIP</span>
+            <span className="upload-tab-icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="none"><path d="M4 7.5 12 3l8 4.5v9L12 21l-8-4.5v-9Z" /><path d="m4.5 7.8 7.5 4.3 7.5-4.3M12 12v8.5M9 4.7l8 4.6" /></svg>
+            </span>
             <div>
               <strong>ZIP Project</strong>
               <small>Complete codebase</small>
@@ -695,7 +669,9 @@ print(divide(10, 0))`
             }
             disabled={loading}
           >
-            <span>{"{ }"}</span>
+            <span className="upload-tab-icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="none"><path d="M8 5H6a2 2 0 0 0-2 2v2.5a2.5 2.5 0 0 1-2 2.5 2.5 2.5 0 0 1 2 2.5V17a2 2 0 0 0 2 2h2M16 5h2a2 2 0 0 1 2 2v2.5a2.5 2.5 0 0 0 2 2.5 2.5 2.5 0 0 0-2 2.5V17a2 2 0 0 1-2 2h-2" /></svg>
+            </span>
             <div>
               <strong>Source Files</strong>
               <small>Multiple files</small>
@@ -714,7 +690,9 @@ print(divide(10, 0))`
             }
             disabled={loading}
           >
-            <span>&lt;/&gt;</span>
+            <span className="upload-tab-icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="none"><path d="m8 7-5 5 5 5M16 7l5 5-5 5M14 4l-4 16" /></svg>
+            </span>
             <div>
               <strong>Paste Code</strong>
               <small>Quick review</small>
@@ -733,7 +711,9 @@ print(divide(10, 0))`
             }
             disabled={loading}
           >
-            <span>⚡</span>
+            <span className="upload-tab-icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="none"><circle cx="6" cy="5" r="2" /><circle cx="18" cy="6" r="2" /><circle cx="12" cy="19" r="2" /><path d="M6 7v3a4 4 0 0 0 4 4h2a4 4 0 0 1 4 4M18 8v1a5 5 0 0 1-5 5h-1" /></svg>
+            </span>
             <div>
               <strong>GitHub</strong>
               <small>Repository URL</small>
@@ -782,10 +762,12 @@ print(divide(10, 0))`
               onDrop={handleDrop}
             >
 
-              <div className="drop-zone-icon">
-                {uploadType === "zip"
-                  ? "ZIP"
-                  : "{ }"}
+              <div className="drop-zone-icon" aria-hidden="true">
+                {uploadType === "zip" ? (
+                  <svg viewBox="0 0 24 24" fill="none"><path d="M4 7.5 12 3l8 4.5v9L12 21l-8-4.5v-9Z" /><path d="m4.5 7.8 7.5 4.3 7.5-4.3M12 12v8.5M9 4.7l8 4.6" /></svg>
+                ) : (
+                  <svg viewBox="0 0 24 24" fill="none"><path d="M8 5H6a2 2 0 0 0-2 2v2.5a2.5 2.5 0 0 1-2 2.5 2.5 2.5 0 0 1 2 2.5V17a2 2 0 0 0 2 2h2M16 5h2a2 2 0 0 1 2 2v2.5a2.5 2.5 0 0 0 2 2.5 2.5 2.5 0 0 0-2 2.5V17a2 2 0 0 1-2 2h-2" /></svg>
+                )}
               </div>
 
               {/* ZIP */}
@@ -911,17 +893,73 @@ print(divide(10, 0))`
 
 
         {/* ======================================================
-            GITHUB URL INPUT
+            GITHUB INPUT & REPO SELECTOR
             ====================================================== */}
 
         {uploadType === "github" && (
-
           <div className="github-input-container">
+            {githubConnected ? (
+              <div style={{ marginBottom: "16px", padding: "14px", backgroundColor: "var(--success-bg)", borderRadius: "var(--radius-md)", border: "1px solid var(--success-border)" }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                  <span style={{ fontSize: "14px", color: "var(--success)", fontWeight: 600 }}>
+                    ✅ Connected as @{githubUsername}
+                  </span>
+                  <button
+                    type="button"
+                    className="btn-secondary"
+                    style={{ padding: "4px 10px", fontSize: "12px" }}
+                    onClick={() => navigate("/configuration")}
+                  >
+                    Manage ⚙️
+                  </button>
+                </div>
+
+                {githubRepos.length > 0 && (
+                  <div style={{ marginTop: "12px" }}>
+                    <label style={{ fontSize: "13px", fontWeight: 600, display: "block", marginBottom: "6px" }}>
+                      Choose a Repository from your Account:
+                    </label>
+                    <select
+                      style={{ width: "100%", padding: "10px", borderRadius: "var(--radius-md)", border: "1px solid var(--border)" }}
+                      value={githubUrl}
+                      onChange={(e) => setGithubUrl(e.target.value)}
+                    >
+                      <option value="">-- Select repository --</option>
+                      {githubRepos.map((r: any) => (
+                        <option key={r.id} value={r.html_url}>
+                          {r.full_name} ({r.default_branch || "main"}) {r.private ? "🔒" : ""}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                )}
+                {githubRepos.length === 0 && (
+                  <div style={{ marginTop: "10px", fontSize: "12.5px", color: "var(--text-secondary)" }}>
+                    No repositories found in this account yet. You can enter any public or private repository URL below!
+                  </div>
+                )}
+              </div>
+            ) : (
+              <div>
+                <div style={{ marginBottom: "16px", padding: "12px", backgroundColor: "var(--bg-subtle)", borderRadius: "var(--radius-md)", border: "1px solid var(--border)", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                  <span style={{ fontSize: "13.5px", color: "var(--text-secondary)" }}>
+                    Want to connect private repos & push automatic Pull Requests?
+                  </span>
+                  <button
+                    type="button"
+                    className="btn-secondary"
+                    style={{ padding: "5px 12px", fontSize: "13px" }}
+                    onClick={() => navigate("/configuration")}
+                  >
+                    Connect GitHub App ↗
+                  </button>
+                </div>
+              </div>
+            )}
 
             <div className="paste-field">
-
               <label htmlFor="github-url">
-                Repository URL
+                Or Enter Repository URL Manually:
               </label>
 
               <input
@@ -937,15 +975,11 @@ print(divide(10, 0))`
                   )
                 }
               />
-
             </div>
 
             <p className="github-hint">
-              Enter a public GitHub repository URL.
-              The entire codebase will be downloaded
-              and analyzed.
+              The repository will be indexed via RAG. After AI analysis, you can push fixes to a new branch and automatically open a Pull Request.
             </p>
-
           </div>
         )}
 
@@ -1038,11 +1072,7 @@ print(divide(10, 0))`}
             </>
           ) : (
             <>
-              {uploadType === "paste"
-                ? "Analyze Code"
-                : uploadType === "github"
-                ? "Analyze Repository"
-                : "Analyze Project"}
+              Next
               <span> →</span>
             </>
           )}
