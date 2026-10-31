@@ -1,262 +1,701 @@
-AI Code Review Assistant
+🤖 AI Code Review Assistant
 
-Grounded AI Code Intelligence | Automated Code Auditing & Intelligent Bug Detection
+Grounded AI Code Intelligence | Intelligent Code Auditing & Automated Fixes
 
-An AI-powered code review platform that analyzes source code and entire software projects to identify bugs, runtime errors, security vulnerabilities, performance bottlenecks, and code quality issues. It uses Retrieval-Augmented Generation (RAG), multi-model AI analysis, and GitHub integration to provide context-aware reviews, explain problems, suggest corrections, and deliver professional review reports through Gmail.
+<p align="center">
+  <img src="https://img.shields.io/badge/AI-Powered-6C63FF?style=for-the-badge" alt="AI Powered">
+  <img src="https://img.shields.io/badge/RAG-Enabled-00A884?style=for-the-badge" alt="RAG Enabled">
+  <img src="https://img.shields.io/badge/Python-FastAPI-3776AB?style=for-the-badge&logo=python&logoColor=white" alt="Python FastAPI">
+  <img src="https://img.shields.io/badge/React-TypeScript-3178C6?style=for-the-badge&logo=react&logoColor=white" alt="React TypeScript">
+  <img src="https://img.shields.io/badge/GitHub-Integrated-181717?style=for-the-badge&logo=github" alt="GitHub Integration">
+</p><p align="center">
+  <strong>Detect bugs. Understand code. Generate fixes. Deliver intelligent reviews.</strong>
+</p>---
+
+📌 Table of Contents
+
+- "Overview" (#-overview)
+- "Project Objectives" (#-project-objectives)
+- "Key Features" (#-key-features)
+- "Technology Stack" (#-technology-stack)
+- "System Architecture" (#-system-architecture)
+- "Application Workflow" (#-application-workflow)
+- "AI and RAG Pipeline" (#-ai-and-rag-pipeline)
+- "GitHub Integration" (#-github-integration)
+- "Gmail Report Delivery" (#-gmail-report-delivery)
+- "Report Formats" (#-report-formats)
+- "Project Structure" (#-project-structure)
+- "Installation and Setup" (#-installation-and-setup)
+- "Environment Configuration" (#-environment-configuration)
+- "Example Review" (#-example-review)
+- "Advantages" (#-advantages)
+- "Limitations" (#-limitations)
+- "Future Enhancements" (#-future-enhancements)
+- "Project Team" (#-project-team)
+- "Academic Information" (#-academic-information)
+- "Conclusion" (#-conclusion)
 
 ---
 
-📌 Project Overview
+📖 Overview
 
-The AI Code Review Assistant is designed to automate and improve the software code review process using Artificial Intelligence and Large Language Models (LLMs).
+AI Code Review Assistant is an intelligent software code auditing platform that uses Artificial Intelligence, Large Language Models (LLMs), and Retrieval-Augmented Generation (RAG) to analyze source code and identify potential software defects.
 
-Traditional code review requires developers to manually inspect source code, identify potential problems, understand their impact, and implement corrections. This process can be time-consuming, especially when working with large projects containing multiple files and dependencies.
+The system enables developers to review individual files, complete project archives, pasted code, and GitHub repositories. It examines source code to identify bugs, runtime errors, security vulnerabilities, performance bottlenecks, and code quality issues.
 
-Our system provides an intelligent review environment where developers can upload source code, submit project archives, paste code, or connect GitHub repositories. The system analyzes the code, retrieves relevant project context, identifies potential issues, and generates actionable recommendations with corrected code.
+Unlike traditional manual code review, the platform provides contextual explanations, suggested corrections, and corrected code through an interactive review interface.
 
-The platform also supports an interactive correction workflow, allowing developers to inspect proposed changes, accept or reject fixes, and create GitHub Pull Requests. Review reports can be generated in multiple formats and automatically delivered to the user's Gmail account.
+Developers can inspect proposed changes, accept or reject individual fixes, and push accepted corrections to GitHub through dedicated branches and Pull Requests.
+
+The application also generates professional review reports and delivers them through Gmail, allowing developers to access their review results outside the platform.
+
+The Core Idea
+
+«Transform code review from a time-consuming manual activity into an intelligent, context-aware, and developer-controlled workflow.»
+
+---
 
 🎯 Project Objectives
 
-- Automate source code review using AI-based analysis.
-- Detect bugs, runtime errors, and logical issues.
-- Identify potential security vulnerabilities.
-- Analyze performance bottlenecks and inefficient algorithms.
-- Improve code readability, maintainability, and coding standards.
-- Generate context-aware explanations and suggested code corrections.
-- Support project-wide analysis across multiple source files.
-- Integrate with GitHub for repository analysis and Pull Request creation.
-- Generate professional code review reports in multiple formats.
-- Deliver review reports and corrected code through Gmail.
-- Provide an interactive interface for reviewing and accepting AI-generated fixes.
+Objective| Description
+Automated Code Review| Analyze source code and identify potential issues using AI
+Bug Detection| Detect logical errors, runtime exceptions, and programming mistakes
+Security Analysis| Identify potential vulnerabilities and insecure coding practices
+Performance Analysis| Examine inefficient algorithms and resource usage
+Code Quality Improvement| Improve readability, maintainability, and coding practices
+Intelligent Code Correction| Generate suggested fixes and corrected code
+Project Understanding| Analyze relationships between source files using RAG
+GitHub Integration| Review repositories and create Pull Requests for accepted changes
+Automated Reporting| Generate structured reports in multiple formats
+Email Delivery| Deliver review reports and configured code artifacts through Gmail
+
+---
 
 ✨ Key Features
 
-1. Intelligent Code Review
+<table>
+<tr>
+<td width="50%">🐛 Bug Detection
 
-- Analyze individual source files and complete software projects.
-- Review code using AI-powered analysis.
-- Identify bugs, errors, security risks, performance issues, and code quality concerns.
-- Provide issue descriptions, severity levels, affected locations, and suggested solutions.
-- Generate corrected code with explanations.
+- Identify runtime errors
+- Detect logical defects
+- Highlight potential exceptions
+- Explain the cause of each issue
 
-2. Multiple Code Input Methods
+</td>
+<td width="50%">🛡️ Security Analysis
 
-- Upload project ZIP archives.
-- Upload individual source files.
-- Paste source code directly into the application.
-- Connect and analyze GitHub repositories.
-- Perform project-wide reviews across supported source files.
+- Identify potential vulnerabilities
+- Detect insecure coding practices
+- Highlight risky operations
+- Recommend safer alternatives
 
-3. RAG-Based Project Understanding
+</td>
+</tr>
+<tr>
+<td>⚡ Performance Analysis
 
-The system uses Retrieval-Augmented Generation to improve the relevance of AI-generated reviews.
+- Identify inefficient operations
+- Evaluate algorithmic complexity
+- Detect potential bottlenecks
+- Recommend optimizations
 
-- Load and process source code files.
-- Split code into manageable chunks.
-- Generate semantic embeddings.
-- Store embeddings in a vector database.
-- Retrieve relevant code sections based on review queries.
-- Provide retrieved context to the AI model.
-- Generate grounded and context-aware review findings.
+</td>
+<td>✨ Code Quality
 
-4. Multi-Model AI Configuration
+- Review readability
+- Identify maintainability concerns
+- Detect structural problems
+- Recommend coding improvements
 
-- Configure multiple AI models and providers.
-- Support local Ollama models.
-- Configure cloud-based AI providers where supported.
-- Select models for review execution.
-- Support single-agent and multi-agent review workflows.
-- Customize model parameters such as temperature.
+</td>
+</tr>
+<tr>
+<td>🧠 RAG-Based Code Understanding
 
-5. Interactive Code Preview & Diff
+- Semantic code retrieval
+- Project-aware analysis
+- Contextual review generation
+- Multi-file code understanding
 
-- Display original and proposed corrected code.
-- Compare changes using a side-by-side diff interface.
-- Accept or reject individual proposed corrections.
-- Request additional modifications from the AI agent.
-- Review corrections before committing them.
-- Push accepted changes to GitHub through a separate branch.
+</td>
+<td>🔧 Intelligent Code Fixes
 
-6. GitHub Integration
+- Generate corrected code
+- Explain proposed changes
+- Display before-and-after diffs
+- Accept or reject individual fixes
 
-- Authenticate with GitHub.
-- Access authorized repositories.
-- Select repositories and branches for analysis.
-- Review repository source code.
-- Inspect proposed code changes.
-- Create dedicated branches for accepted fixes.
-- Commit accepted corrections.
-- Automatically open Pull Requests against the target branch.
-- Review changes before merging them into the main branch.
+</td>
+</tr>
+<tr>
+<td>🔗 GitHub Integration
 
-7. Automated Review Report Generation
+- Repository authorization
+- Branch-based corrections
+- Commit accepted changes
+- Automated Pull Request creation
 
-Generate structured reports containing:
+</td>
+<td>📧 Gmail Report Delivery
 
-- Project name and programming language.
-- Project health score.
-- Executive summary.
-- Detailed review findings.
-- Issue severity and category.
-- File paths and line locations.
-- Problem descriptions and explanations.
-- Suggested fixes and corrected code.
-- Security and performance observations.
-- Code quality recommendations.
-- Final review verdict.
+- Automated report emails
+- PDF, HTML, and Markdown reports
+- Corrected-code attachments
+- Access to review results outside the app
 
-8. Gmail-Based Report Delivery
+</td>
+</tr>
+</table>Additional Platform Features
 
-The system provides automated email delivery of code review results.
-
-- Send review reports directly to the user's Gmail address.
-- Deliver reports after the review process is completed.
-- Attach generated report files.
-- Include the project name and review summary in the email.
-- Deliver corrected code and review artifacts where configured.
-- Support convenient access to reports outside the application.
-
-Supported report attachments:
-
-File| Purpose
-"Review_Report.pdf"| Professional, printable review report
-"Review_Report.md"| Markdown report for documentation and GitHub
-"Review_Report.html"| Browser-readable interactive report
-"Corrected_Code.txt"| Corrected code generated from the review
-
-9. Dashboard & Review History
-
-- View code review statistics.
-- Track review activity.
-- Access previous review results.
-- Monitor detected issues and project health.
-- Navigate between completed reviews.
-- View project details and analysis summaries.
-
-10. Workspace Configuration
-
-- Customize workspace themes.
-- Configure AI models and providers.
-- Select review execution modes.
-- Manage GitHub integration.
-- Configure review preferences.
-- Access application settings through a centralized configuration interface.
+Feature| Description
+Multiple Input Sources| ZIP archives, source files, pasted code, and GitHub repositories
+Multi-Model Configuration| Configure supported cloud and local AI models
+Multi-Agent Review| Execute collaborative review workflows using configured models
+Dashboard| View review statistics and project analysis information
+Review History| Access previously completed code reviews
+Workspace Configuration| Manage themes, AI models, review settings, and integrations
+Project Details| View analyzed files, methods, classes, and detected libraries
+Multiple Report Formats| Generate PDF, HTML, and Markdown review reports
 
 ---
 
 🛠️ Technology Stack
 
-Frontend Technologies
+Frontend
 
 Technology| Purpose
-React| Build the interactive and component-based user interface
-TypeScript / JavaScript| Implement frontend logic and application functionality
-Vite| Provide frontend development server and optimized builds
-HTML5| Structure application pages and components
-CSS3| Implement responsive layouts, styling, and themes
+React| Build reusable UI components and interactive pages
+TypeScript / JavaScript| Implement application logic and frontend behavior
+Vite| Provide development server and production build tooling
+HTML5| Structure application pages
+CSS3| Create responsive layouts, themes, and visual styling
 Axios| Communicate with backend APIs
-React Router| Handle navigation between application pages
-Diff Viewer| Display original and proposed code changes
+React Router| Navigate between application pages
 
-Backend Technologies
-
-Technology| Purpose
-Python| Implement AI processing and backend logic
-FastAPI| Provide REST APIs for code review and application services
-Flask| Used in applicable supporting services or earlier application components, if retained in the deployed version
-Uvicorn| Run the FastAPI application server
-Pydantic| Validate request data and structured AI responses
-
-Artificial Intelligence & RAG
+Backend
 
 Technology| Purpose
-Large Language Models (LLMs)| Analyze code and generate explanations and fixes
+Python| Implement backend logic and AI processing
+FastAPI| Provide REST APIs for review and application services
+Uvicorn| Run the FastAPI application
+Pydantic| Validate structured request and response data
+SQLite| Store application data where configured
+
+Artificial Intelligence and RAG
+
+Technology| Purpose
+Large Language Models| Analyze code and generate explanations and corrections
 Groq API| Provide cloud-based LLM inference where configured
-Ollama| Run supported local language models
-SentenceTransformers| Convert code chunks and queries into semantic embeddings
-"all-MiniLM-L6-v2"| Generate vector representations for semantic retrieval
-FAISS| Store and search vector embeddings efficiently
-RAG| Retrieve relevant source code context before AI generation
+Ollama| Run supported local AI models
+SentenceTransformers| Generate semantic embeddings
+"all-MiniLM-L6-v2"| Convert source code chunks and queries into vectors
+FAISS| Store and retrieve semantically relevant code chunks
+RAG| Ground AI reviews in retrieved project source code
 Multi-Agent AI| Support collaborative analysis using configured models
 
-Database & Version Control
+Integrations and Reporting
 
 Technology| Purpose
-SQLite| Store application data where configured
-Git| Track source code changes
-GitHub API| Access repositories, branches, commits, and Pull Requests
-
-Report Generation & Communication
-
-Technology| Purpose
-Python PDF libraries| Generate downloadable PDF reports
+Git| Version control and source code management
+GitHub API| Repository access, branches, commits, and Pull Requests
+Gmail SMTP| Email delivery of generated review reports
+PDF Generation Library| Create printable PDF reports
 HTML / CSS| Generate formatted HTML reports
-Markdown| Generate portable review documentation
-SMTP / Gmail| Send review reports through email
-Environment Variables| Store API credentials and configuration securely
+Markdown| Create portable review documentation
+Environment Variables| Store API credentials and application configuration
 
 ---
 
 🏗️ System Architecture
 
-                 Developer / User
-                        |
-                        v
-          React + TypeScript Frontend
-                        |
-       +----------------+----------------+
-       |                |                |
-   ZIP Upload       Paste Code      GitHub Repo
-       |                |                |
-       +----------------+----------------+
-                        |
-                        v
-               FastAPI Backend
-                        |
-                        v
-                Source Code Loader
-                        |
-                        v
-                 Code Chunking
-                        |
-                        v
-              SentenceTransformer
-                 Embeddings
-                        |
-                        v
-                 FAISS Vector DB
-                        |
-                        v
-             Semantic Code Retrieval
-                        |
-                        v
-               Prompt Construction
-                        |
-                        v
-             AI Review / Agent Pool
-                        |
-                        v
-              Structured Review Output
-                        |
-       +----------------+----------------+
-       |                |                |
-   Bug Detection   Security Review   Performance
-       |                |                |
-       +----------------+----------------+
-                        |
-                        v
-             Code Quality Analysis
-                        |
-                        v
-           Suggested Fixes & Corrected Code
-                        |
-                        v
-              Interactive Code Diff
-                        |
-             +----------+-----------+
-             |                      |
-        Accept / Reject       Request Changes
+flowchart TD
+    A[Developer / User] --> B[React Frontend]
+    B --> C{Project Source}
+
+    C --> D[ZIP Upload]
+    C --> E[Source Files]
+    C --> F[Paste Code]
+    C --> G[GitHub Repository]
+
+    D --> H[FastAPI Backend]
+    E --> H
+    F --> H
+    G --> H
+
+    H --> I[Source Code Loader]
+    I --> J[Code Chunker]
+    J --> K[SentenceTransformer Embeddings]
+    K --> L[FAISS Vector Database]
+
+    L --> M[Semantic Retriever]
+    M --> N[Prompt Builder]
+    N --> O[AI Model / Multi-Agent Pool]
+
+    O --> P[Structured Review Findings]
+
+    P --> Q[Bug Detection]
+    P --> R[Security Analysis]
+    P --> S[Performance Analysis]
+    P --> T[Code Quality Analysis]
+
+    Q --> U[Suggested Fixes]
+    R --> U
+    S --> U
+    T --> U
+
+    U --> V[Interactive Code Diff]
+    V --> W[Accept / Reject Changes]
+
+    W --> X[GitHub Branch and Commit]
+    X --> Y[Pull Request Creation]
+
+    P --> Z[Report Generation]
+    Z --> Z1[PDF Report]
+    Z --> Z2[HTML Report]
+    Z --> Z3[Markdown Report]
+    Z --> Z4[Corrected Code]
+
+    Z1 --> AA[Gmail Delivery]
+    Z2 --> AA
+    Z3 --> AA
+    Z4 --> AA
+
+---
+
+🔄 Application Workflow
+
+sequenceDiagram
+    actor Developer
+    participant UI as React Frontend
+    participant API as FastAPI Backend
+    participant RAG as RAG Pipeline
+    participant AI as AI Model
+    participant GitHub
+    participant Gmail
+
+    Developer->>UI: Upload code / Select repository
+    UI->>API: Submit review request
+    API->>RAG: Load and index source code
+    RAG->>RAG: Chunk, embed, and store code
+    RAG->>AI: Send retrieved context and prompt
+    AI-->>API: Return structured findings
+    API-->>UI: Display review results
+
+    Developer->>UI: Inspect proposed corrections
+    UI-->>Developer: Show code diff and explanations
+    Developer->>UI: Accept selected fixes
+    UI->>API: Submit accepted changes
+    API->>GitHub: Create branch, commit, and Pull Request
+    GitHub-->>UI: Return Pull Request details
+
+    API->>API: Generate review reports
+    API->>Gmail: Send report email with attachments
+    Gmail-->>Developer: Deliver review results
+
+---
+
+🧠 AI and RAG Pipeline
+
+The project uses Retrieval-Augmented Generation to provide AI models with relevant source code context before generating review findings.
+
+RAG Processing Stages
+
+Stage| Component| Responsibility
+1| Loader| Extract source files from supported inputs
+2| Chunker| Divide source code into manageable segments
+3| Embedder| Convert code chunks into semantic vectors
+4| Vector Store| Store embeddings using FAISS
+5| Retriever| Retrieve relevant source code for review questions
+6| Prompt Builder| Combine code context and review instructions
+7| AI Pipeline| Generate contextual analysis
+8| Structured Output| Organize findings into defined categories
+9| Fix Generation| Suggest corrections and corrected code
+
+RAG Architecture
+
+flowchart LR
+    A[Source Code] --> B[Loader]
+    B --> C[Chunker]
+    C --> D[Embedding Model]
+    D --> E[FAISS Index]
+
+    F[Review Question] --> G[Query Embedding]
+    G --> H[Retriever]
+    E --> H
+
+    H --> I[Relevant Code Context]
+    I --> J[Prompt Builder]
+    J --> K[LLM]
+    K --> L[Review Findings and Fixes]
+
+Why RAG?
+
+- Provides relevant source code context to the AI model.
+- Helps analyze code across multiple files.
+- Reduces reliance on general model knowledge alone.
+- Improves the relevance of explanations and recommendations.
+- Supports project-aware code review.
+
+---
+
+🔗 GitHub Integration
+
+The GitHub integration connects AI code review with practical software development workflows.
+
+Supported Workflow
+
+1. Connect a GitHub account through the application.
+2. Authorize repositories for access.
+3. Select a repository and target branch.
+4. Analyze repository source code.
+5. Inspect AI-generated corrections.
+6. Accept or reject proposed changes.
+7. Create a dedicated correction branch.
+8. Commit accepted corrections.
+9. Open a Pull Request against the target branch.
+10. Review and merge changes through GitHub.
+
+Pull Request Workflow
+
+flowchart TD
+    A[Review GitHub Repository] --> B[Generate Proposed Fixes]
+    B --> C[Developer Inspects Diff]
+    C --> D{Accept Fixes?}
+    D -->|No| E[Reject or Modify]
+    D -->|Yes| F[Create Dedicated Branch]
+    F --> G[Commit Accepted Changes]
+    G --> H[Open Pull Request]
+    H --> I[Human Review]
+    I --> J[Merge When Approved]
+
+Important: Accepted AI corrections are prepared for review through a Pull Request. The developer retains control over the final merge.
+
+---
+
+📧 Gmail Report Delivery
+
+The application supports automated delivery of code review results through Gmail.
+
+Email Workflow
+
+1. Complete a code review.
+2. Generate the review report and configured artifacts.
+3. Prepare the email with project details and review summary.
+4. Attach the generated files.
+5. Send the email through the configured Gmail service.
+6. The developer receives the review report in their inbox.
+
+Email Contents
+
+Item| Description
+Email Subject| AI Code Review Report – Project Name
+Project Summary| Project name, language, and health score
+Review Findings| Summary of identified issues
+PDF Report| Professional printable report
+HTML Report| Browser-readable report
+Markdown Report| Portable text-based report
+Corrected Code| Generated code artifact, where configured
+
+Gmail Configuration
+
+The application uses Gmail SMTP with authenticated credentials.
+
+SMTP Host: smtp.gmail.com
+SMTP Port: 587
+Authentication: Gmail App Password
+Connection Security: STARTTLS
+
+Security Note: Gmail App Passwords, GitHub tokens, and AI API keys must be stored securely in environment variables and must never be committed to the repository.
+
+---
+
+📄 Report Formats
+
+Report File| Format| Purpose
+"Review_Report.pdf"| PDF| Printable and shareable audit report
+"Review_Report.md"| Markdown| Documentation and GitHub-compatible report
+"Review_Report.html"| HTML| Browser-readable formatted report
+"Corrected_Code.txt"| Text| Corrected code generated by the AI
+
+Report Contents
+
+- Project name and programming language
+- Grounded project health score
+- Executive summary
+- Detailed findings
+- Issue category and severity
+- Affected file and line location
+- Problem explanation
+- Suggested solution
+- Before-and-after code comparison
+- Corrected code
+- Final review verdict
+
+---
+
+📂 Project Structure
+
+The following structure represents the major logical components of the application. Update filenames to match the actual repository implementation.
+
+AI-Code-Review-Assistant/
+│
+├── frontend/
+│   ├── public/
+│   ├── src/
+│   │   ├── components/
+│   │   │   ├── Upload/
+│   │   │   ├── CodeEditor/
+│   │   │   ├── DiffViewer/
+│   │   │   ├── ReviewFindings/
+│   │   │   └── Dashboard/
+│   │   │
+│   │   ├── pages/
+│   │   │   ├── Home.jsx
+│   │   │   ├── Review.jsx
+│   │   │   ├── Dashboard.jsx
+│   │   │   ├── History.jsx
+│   │   │   └── Configuration.jsx
+│   │   │
+│   │   ├── services/
+│   │   │   └── api.js
+│   │   ├── App.jsx
+│   │   ├── App.css
+│   │   └── main.jsx
+│   │
+│   ├── package.json
+│   └── vite.config.js
+│
+├── backend/
+│   ├── app.py
+│   │
+│   ├── routes/
+│   │   ├── review_routes.py
+│   │   ├── upload_routes.py
+│   │   ├── github_routes.py
+│   │   └── report_routes.py
+│   │
+│   ├── services/
+│   │   ├── review_service.py
+│   │   ├── upload_service.py
+│   │   ├── github_service.py
+│   │   ├── report_service.py
+│   │   └── email_service.py
+│   │
+│   ├── rag/
+│   │   ├── loader.py
+│   │   ├── chunker.py
+│   │   ├── embedder.py
+│   │   ├── vector_store.py
+│   │   ├── retriever.py
+│   │   ├── prompt_builder.py
+│   │   └── pipeline.py
+│   │
+│   ├── report_generation/
+│   │   ├── pdf_generator.py
+│   │   ├── html_generator.py
+│   │   └── markdown_generator.py
+│   │
+│   ├── requirements.txt
+│   └── .env.example
+│
+├── tests/
+├── .gitignore
+├── README.md
+└── LICENSE
+
+---
+
+⚙️ Installation and Setup
+
+Prerequisites
+
+Software| Requirement
+Python| 3.10+ recommended
+Node.js| Compatible with the installed Vite version
+npm| Node package manager
+Git| For repository cloning and version control
+Ollama| Required when using local models
+GitHub Account| Required for GitHub integration
+Gmail Account| Required for email report delivery
+
+1. Clone the Repository
+
+git clone https://github.com/<your-username>/AI-Code-Review-Assistant.git
+cd AI-Code-Review-Assistant
+
+2. Set Up the Backend
+
+cd backend
+python -m venv venv
+
+Activate the virtual environment on Windows:
+
+venv\Scripts\activate
+
+Install dependencies:
+
+pip install -r requirements.txt
+
+Start the backend:
+
+uvicorn app:app --reload
+
+Backend URL:
+
+http://localhost:8000
+
+API documentation:
+
+http://localhost:8000/docs
+
+3. Set Up the Frontend
+
+Open a separate terminal:
+
+cd frontend
+npm install
+npm run dev
+
+Open the local URL displayed by Vite.
+
+4. Configure Local AI Models
+
+If the application uses Ollama:
+
+ollama pull qwen2.5:3b
+
+ollama pull llama3.2:3b
+
+Use the exact model names configured in the application.
+
+5. Configure GitHub
+
+1. Open the Workspace Configuration page.
+2. Connect your GitHub account.
+3. Authorize the required repositories.
+4. Select a repository and branch.
+5. Start a code review.
+
+6. Configure Gmail
+
+1. Enable two-step verification on your Google account.
+2. Generate a Google App Password.
+3. Configure the Gmail SMTP settings.
+4. Store credentials in the backend environment.
+5. Complete a test review and verify email delivery.
+
+---
+
+🔐 Environment Configuration
+
+Create a ".env" file in the backend directory using the application's supported environment variables.
+
+Example:
+
+# AI Provider
+GROQ_API_KEY=your_groq_api_key
+
+# Gmail SMTP
+SMTP_HOST=smtp.gmail.com
+SMTP_PORT=587
+SMTP_USERNAME=your_email@gmail.com
+SMTP_PASSWORD=your_google_app_password
+SMTP_FROM_EMAIL=your_email@gmail.com
+
+# Application
+APP_ENV=development
+
+Additional GitHub and model configuration variables may be required depending on the implementation.
+
+Never upload your actual ".env" file to GitHub.
+
+---
+
+📊 Example Review
+
+Sample Project
+
+Property| Value
+Project Name| "javatest1"
+Programming Language| Java
+Project Health Score| 75 / 100
+Detected Issue| Division by Zero
+Severity| Critical
+Affected Method| "calculateAverage()"
+
+Problem
+
+The method attempts to calculate the average of an empty integer array. When the array length is zero, the division operation throws an "ArithmeticException".
+
+Suggested Correction
+
+public static double calculateAverage(int[] numbers) {
+    if (numbers == null || numbers.length == 0) {
+        return 0;
+    }
+
+    int sum = 0;
+
+    for (int number : numbers) {
+        sum += number;
+    }
+
+    return (double) sum / numbers.length;
+}
+
+Expected Review Result
+
+- Identify the division-by-zero issue.
+- Explain the cause of the exception.
+- Recommend input validation.
+- Generate corrected code.
+- Display the proposed fix in the diff interface.
+- Include the finding in the generated review report.
+
+---
+
+✅ Advantages
+
+Advantage| Benefit
+Automated Review| Reduces repetitive manual code inspection
+Early Bug Detection| Helps identify issues before deployment
+Context-Aware Analysis| Uses retrieved project code to support AI findings
+Intelligent Corrections| Provides suggested fixes with explanations
+Security Awareness| Helps identify potential insecure coding practices
+Code Quality Improvement| Supports readable and maintainable code
+Developer Control| Allows developers to accept or reject proposed changes
+GitHub Workflow| Integrates review corrections with Pull Requests
+Automated Documentation| Generates structured review reports
+Email Delivery| Makes review results accessible through Gmail
+Flexible AI Models| Supports configured local and cloud models
+
+---
+
+⚠️ Limitations
+
+- AI-generated findings may include false positives or missed issues.
+- Suggested fixes must be reviewed and tested by developers.
+- Review quality depends on the source code context and model capabilities.
+- Large projects may require additional processing time and memory.
+- Local model performance depends on hardware resources.
+- Cloud model usage may involve API costs and rate limits.
+- AI code review does not replace testing, static analysis, or security audits.
+- GitHub and Gmail integrations require valid authorization and configuration.
+
+---
+
+🚀 Future Enhancements
+
+- Automated unit test generation for proposed fixes.
+- Integration with CI/CD pipelines.
+- Expanded programming language support.
+- Advanced static analysis integration.
+- Custom organization coding standards.
+- Team collaboration and review assignments.
+- Improved large-repository indexing.
+- Security scanner integration.
+- Review analytics and tre     Accept / Reject       Request Changes
              |
              v
        GitHub Branch & Commit
