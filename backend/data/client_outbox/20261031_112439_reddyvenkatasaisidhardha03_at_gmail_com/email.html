@@ -1,0 +1,43 @@
+
+        <!DOCTYPE html>
+        <html>
+        <head><meta charset="utf-8" /></head>
+        <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; background-color: #f8fafc; color: #0f172a; margin: 0; padding: 24px;">
+            <div style="max-width: 720px; margin: 0 auto; background-color: #ffffff; border: 1px solid #e2e8f0; border-radius: 16px; padding: 32px; box-shadow: 0 4px 6px rgba(0,0,0,0.04);">
+                <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 20px; border-bottom: 1px solid #e2e8f0; padding-bottom: 16px;">
+                    <div style="width: 36px; height: 36px; background: #4f46e5; border-radius: 8px; color: #fff; font-weight: 800; display: flex; align-items: center; justify-content: center;">&lt;/&gt;</div>
+                    <div>
+                        <h2 style="margin: 0; font-size: 20px; color: #0f172a;">AI Code Review Report</h2>
+                        <span style="font-size: 13px; color: #64748b;">Project: rock-paper-scisors • Markdown, Python, HTML, JSON, CSS, JavaScript</span>
+                    </div>
+                </div>
+                
+            <div style="background: #ffffff; border: 2px solid #10b981; border-radius: 12px; padding: 20px; margin: 20px 0; text-align: center;">
+                <span style="font-size: 11px; font-weight: 800; letter-spacing: 2px; color: #64748b; text-transform: uppercase;">GROUNDED PROJECT HEALTH SCORE</span>
+                <div style="font-size: 48px; font-weight: 900; color: #10b981; margin: 8px 0; line-height: 1;">
+                    85 <span style="font-size: 20px; font-weight: 600; color: #94a3b8;">/ 100</span>
+                </div>
+            </div>
+            
+                <div style="background: #f1f5f9; border-radius: 10px; padding: 18px; margin-bottom: 24px;">
+                    <h4 style="margin: 0 0 6px 0; color: #334155; font-size: 13px; text-transform: uppercase;">Executive Summary</h4>
+                    <p style="margin: 0; font-size: 14.5px; color: #475569; line-height: 1.6;">The project contains critical security vulnerabilities including hardcoded credentials and client-side secret storage. There are significant bugs in the React frontend involving state mutation, stale closures, and missing effect cleanup. The backend lacks input validation and proper database connection management.</p>
+                </div>
+                <h3 style="font-size: 18px; margin: 24px 0 14px 0;">Detailed Findings (1 issues)</h3>
+                
+            <div style="background: #ffffff; border: 1px solid #e2e8f0; border-radius: 10px; padding: 20px; margin-bottom: 16px;">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                    <strong style="font-size: 16px; color: #0f172a;">Direct State Mutation in React</strong>
+                    <span style="font-size: 12px; font-weight: 700; text-transform: uppercase; padding: 3px 8px; border-radius: 4px; background: #eef2ff; color: #4f46e5;">Bug • high</span>
+                </div>
+                <p style="color: #475569; font-size: 14px; margin: 8px 0;">Since the object reference remains identical, React&#x27;s shallow comparison determines the state has not changed, preventing the UI from updating with the new score.</p>
+                <div style="background: #f8fafc; border-left: 3px solid #4f46e5; padding: 10px 14px; font-size: 13.5px; color: #334155; margin-top: 10px;"><strong>Suggested Fix:</strong> Replace `score[data.result + &quot;s&quot;]++; setScore(score);` with `setScore(prev =&gt; ({ ...prev, [data.result + &quot;s&quot;]: prev[data.result + &quot;s&quot;] + 1 }));`.</div>
+            </div>
+            
+                <div style="margin-top: 32px; padding-top: 20px; border-top: 1px solid #e2e8f0; text-align: center; font-size: 13px; color: #94a3b8;">
+                    Delivered securely by AI Code Review Assistant • Attached files: Markdown Report, Offline HTML, Refactored Code
+                </div>
+            </div>
+        </body>
+        </html>
+        

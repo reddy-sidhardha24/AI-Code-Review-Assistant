@@ -1,0 +1,4 @@
+.app { max-width: 480px; margin: 2rem auto; font-family: sans-serif; text-align: center; }
+.choices { display: flex; gap: 1rem; justify-content: center; margin: 1rem 0; }
+.choice { padding: 1rem 1.5rem; border: 2px solid #333; border-radius: 8px; cursor: pointer; }
+.choice:hover { background: #eee; }

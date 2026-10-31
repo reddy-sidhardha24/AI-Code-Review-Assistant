@@ -1,0 +1,4 @@
+# Refactored / Corrected Snippets:
+
+# --- Fix for: SQL Query Not Executed (jstest1.ts) ---
+const query = "SELECT * FROM users WHERE username = ?"; db.query(query, [username], (err, results) => { ... });

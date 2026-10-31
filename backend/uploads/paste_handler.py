@@ -1,5 +1,5 @@
 from pathlib import Path
-import shutil
+import uuid
 
 
 class PasteHandler:
@@ -22,8 +22,7 @@ class PasteHandler:
         """
         Save pasted source code as a NEW standalone project.
 
-        Every paste operation replaces the previous pasted
-        project completely.
+        Every paste operation receives a separate project folder.
         """
 
         # ====================================================
@@ -44,23 +43,7 @@ class PasteHandler:
         # PASTED CODE DIRECTORY
         # ====================================================
 
-        project_folder = (
-            self.upload_dir / "pasted_code"
-        )
-
-        # ====================================================
-        # REMOVE PREVIOUS PASTED PROJECT
-        # ====================================================
-
-        if project_folder.exists():
-
-            print(
-                "\nRemoving previous pasted-code project..."
-            )
-
-            shutil.rmtree(
-                project_folder
-            )
+        project_folder = self.upload_dir / f"pasted_code_{uuid.uuid4().hex}"
 
         # ====================================================
         # CREATE FRESH DIRECTORY

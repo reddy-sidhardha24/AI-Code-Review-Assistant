@@ -272,6 +272,17 @@ class GithubHandler:
             f"{owner}/{repo}"
         )
 
+        # Per-user runtime directories are created lazily. Ensure both
+        # destinations exist before streaming the archive to disk or extracting it.
+        try:
+            self.upload_dir.mkdir(parents=True, exist_ok=True)
+            self.extract_dir.mkdir(parents=True, exist_ok=True)
+        except OSError as e:
+            raise HTTPException(
+                status_code=500,
+                detail=f"Could not prepare storage for the GitHub repository: {e}",
+            ) from e
+
         # ========================================================
         # Download ZIP
         # ========================================================

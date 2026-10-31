@@ -8,3 +8,10 @@ sentence-transformers
 PyPDF2
 python-docx
 requests
+openai
+anthropic
+google-genai
+langchain-core>=1.6.4,<2.0.0
+PyJWT
+cryptography
+xhtml2pdf

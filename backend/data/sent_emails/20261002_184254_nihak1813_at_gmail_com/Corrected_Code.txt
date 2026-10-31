@@ -1,0 +1,17 @@
+# ============================================================
+# File: corrected_rockpaper.py
+# ============================================================
+# ============================================================
+# Refactored Code with Applied Fixes: rockpaper.py
+# ============================================================
+
+# Fix for: Encapsulate game logic in functions (Severity: LOW)
+import random
+
+def play_game():
+    choices = ["rock", "paper", "scissors"]
+    print("--- Welcome to Rock, Paper, Scissors! ---")
+    ...
+
+if __name__ == "__main__":
+    play_game()

@@ -1,0 +1,13 @@
+# Refactored / Corrected Snippets:
+
+# --- Fix for: Division by Zero in calculateAverage (javatest1.java) ---
+static int calculateAverage(int[] numbers) {
+    if (numbers == null || numbers.length == 0) {
+        return 0;
+    }
+    int sum = 0;
+    for (int n : numbers) {
+        sum += n;
+    }
+    return sum / numbers.length;
+}

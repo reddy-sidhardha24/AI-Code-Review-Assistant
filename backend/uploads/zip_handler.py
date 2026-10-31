@@ -1,5 +1,6 @@
 import shutil
 import zipfile
+import uuid
 from pathlib import Path
 
 from fastapi import HTTPException, UploadFile
@@ -7,14 +8,15 @@ from fastapi import HTTPException, UploadFile
 
 class ZipHandler:
 
-    # Maximum ZIP file size: 50 MB
+    # Keep in sync with the API-level upload validator.
     MAX_ZIP_SIZE = 50 * 1024 * 1024
 
     # Maximum number of files inside the ZIP
-    MAX_FILE_COUNT = 500
+    MAX_FILE_COUNT = 5000
 
-    # Maximum total extracted size: 200 MB
-    MAX_EXTRACTED_SIZE = 200 * 1024 * 1024
+    # Bound decompression work and disk usage for each project.
+    MAX_FILE_SIZE = 10 * 1024 * 1024
+    MAX_EXTRACTED_SIZE = 500 * 1024 * 1024
 
     def __init__(
         self,
@@ -43,7 +45,8 @@ class ZipHandler:
 
         safe_filename = Path(file.filename).name
 
-        zip_path = self.upload_dir / safe_filename
+        upload_id = uuid.uuid4().hex
+        zip_path = self.upload_dir / f"{upload_id}.zip"
 
         # ========================================================
         # Save uploaded file with size check
@@ -131,6 +134,13 @@ class ZipHandler:
                     m.file_size for m in members
                 )
 
+                if any(m.file_size > self.MAX_FILE_SIZE for m in members if not m.is_dir()):
+                    zip_path.unlink(missing_ok=True)
+                    raise HTTPException(
+                        status_code=400,
+                        detail="A ZIP entry exceeds the 10 MB per-file limit.",
+                    )
+
                 if total_uncompressed > self.MAX_EXTRACTED_SIZE:
 
                     zip_path.unlink(
@@ -142,7 +152,7 @@ class ZipHandler:
                         detail=(
                             "ZIP contents are too large "
                             "when extracted. "
-                            "Maximum extracted size is 200 MB."
+                            "Maximum extracted size is 500 MB."
                         )
                     )
 
@@ -168,13 +178,7 @@ class ZipHandler:
             safe_filename
         ).stem
 
-        project_folder = (
-            self.extract_dir /
-            project_name
-        )
-
-        if project_folder.exists():
-            shutil.rmtree(project_folder)
+        project_folder = self.extract_dir / f"{project_name}_{upload_id}"
 
         project_folder.mkdir(
             parents=True,

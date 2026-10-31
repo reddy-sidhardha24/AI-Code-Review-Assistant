@@ -115,11 +115,16 @@ class RAGPipeline:
     # Constructor
     # ============================================================
 
-    def __init__(self):
+    def __init__(self, storage_dir: Optional[str] = None):
 
         print(
             "\nInitializing RAG Pipeline...\n"
         )
+
+        self.vector_db_dir = storage_dir or self.VECTOR_DB_DIR
+        self.index_path = os.path.join(self.vector_db_dir, "faiss.index")
+        self.metadata_path = os.path.join(self.vector_db_dir, "metadata.pkl")
+        self.project_metadata_path = os.path.join(self.vector_db_dir, "project_metadata.json")
 
         self.loader: Optional[
             ProjectLoader
@@ -156,8 +161,8 @@ class RAGPipeline:
             try:
 
                 self.vector_store.load(
-                    index_path=self.INDEX_PATH,
-                    metadata_path=self.METADATA_PATH
+                    index_path=self.index_path,
+                    metadata_path=self.metadata_path
                 )
 
                 self._create_retriever()
@@ -447,8 +452,8 @@ class RAGPipeline:
         # ========================================================
 
         self.vector_store.save(
-            index_path=self.INDEX_PATH,
-            metadata_path=self.METADATA_PATH
+            index_path=self.index_path,
+            metadata_path=self.metadata_path
         )
 
         # ========================================================
@@ -792,8 +797,8 @@ class RAGPipeline:
             )
 
             self.vector_store.load(
-                index_path=self.INDEX_PATH,
-                metadata_path=self.METADATA_PATH
+                index_path=self.index_path,
+                metadata_path=self.metadata_path
             )
 
             self._create_retriever()
@@ -999,8 +1004,10 @@ class RAGPipeline:
 
     def save_project_metadata(
         self,
-        metadata_path=PROJECT_METADATA_PATH
+        metadata_path=None
     ):
+
+        metadata_path = metadata_path or self.project_metadata_path
 
         if self.project_metadata is None:
 
@@ -1039,8 +1046,10 @@ class RAGPipeline:
 
     def load_project_metadata(
         self,
-        metadata_path=PROJECT_METADATA_PATH
+        metadata_path=None
     ):
+
+        metadata_path = metadata_path or self.project_metadata_path
 
         if not os.path.exists(
             metadata_path
@@ -1093,11 +1102,11 @@ class RAGPipeline:
 
         return (
             os.path.exists(
-                self.INDEX_PATH
+                self.index_path
             )
             and
             os.path.exists(
-                self.METADATA_PATH
+                self.metadata_path
             )
         )
 

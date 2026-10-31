@@ -1,753 +1,468 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState, useCallback, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
+import API from "../api";
+import { useAppAuth } from "../context/AuthContext";
+import ReviewModal from "./ReviewModal";
 
-interface HistoryReview {
+export interface HistoryReview {
   id: string;
   projectName: string;
   language: string;
   question: string;
-
   issueCount: number;
-
   bugs: number;
   security: number;
   performance: number;
   quality: number;
-
   score: number | null;
   confidence: number;
-
   createdAt: string;
+  review?: any;
+}
+
+export interface UploadedFileItem {
+  id: string;
+  file_name: string;
+  file_size: number;
+  file_type: string;
+  upload_time: string;
 }
 
 function Dashboard() {
   const navigate = useNavigate();
+  const { user } = useAppAuth();
 
+  const [activeTab, setActiveTab] = useState<"overview" | "reviews" | "files">("overview");
   const [history, setHistory] = useState<HistoryReview[]>([]);
+  const [files, setFiles] = useState<UploadedFileItem[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [selectedReview, setSelectedReview] = useState<HistoryReview | null>(null);
+  const [searchQuery, setSearchQuery] = useState("");
 
-  /* ==========================================================
-     LOAD HISTORY
-     ========================================================== */
-
-  const loadHistory = () => {
+  const loadData = useCallback(async () => {
+    setLoading(true);
     try {
-      const stored =
-        localStorage.getItem("codeReviewHistory");
-
-      if (!stored) {
-        setHistory([]);
-        return;
+      // 1. Fetch reviews from backend SQLite
+      let dbReviews: HistoryReview[] = [];
+      try {
+        const res = await API.get("/api/reviews");
+        if (res.data?.success && Array.isArray(res.data.reviews)) {
+          dbReviews = res.data.reviews.map((r: any) => ({
+            id: r.id,
+            projectName: r.project_name || "Code Review",
+            language: r.language || "Multi-language",
+            question: r.question,
+            issueCount: r.issue_count ?? 0,
+            bugs: r.bugs_count ?? 0,
+            security: r.security_count ?? 0,
+            performance: r.performance_count ?? 0,
+            quality: r.quality_count ?? 0,
+            score: r.score ?? null,
+            confidence: r.confidence ?? 90,
+            createdAt: r.created_at,
+            review: r.review || {},
+          }));
+        }
+      } catch (err) {
+        console.warn("Could not fetch reviews from SQLite API, using local storage cache:", err);
       }
 
-      const parsed = JSON.parse(stored);
+      // Read local storage as well to guarantee no lost data
+      const stored = localStorage.getItem("codeReviewHistory");
+      const localReviews: HistoryReview[] = stored ? JSON.parse(stored) : [];
 
-      if (Array.isArray(parsed)) {
-        setHistory(parsed);
-      } else {
-        setHistory([]);
-      }
-    } catch (error) {
-      console.error(
-        "Unable to load review history:",
-        error
+      // Combine uniquely by id
+      const map = new Map<string, HistoryReview>();
+      dbReviews.forEach((item) => map.set(item.id, item));
+      localReviews.forEach((item) => {
+        if (!map.has(item.id)) {
+          map.set(item.id, item);
+        }
+      });
+
+      const merged = Array.from(map.values()).sort(
+        (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
       );
+      setHistory(merged);
 
-      setHistory([]);
+      // 2. Fetch uploaded files from SQLite
+      try {
+        const filesRes = await API.get("/api/files");
+        if (filesRes.data?.success && Array.isArray(filesRes.data.files)) {
+          setFiles(filesRes.data.files);
+        }
+      } catch (fErr) {
+        console.warn("Could not fetch uploaded files from SQLite:", fErr);
+      }
+    } catch (e) {
+      console.error("Dashboard data load error:", e);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    loadData();
+  }, [loadData]);
+
+  const handleDeleteReview = async (id: string, e?: React.MouseEvent) => {
+    if (e) e.stopPropagation();
+    if (!window.confirm("Delete this review from history?")) return;
+
+    try {
+      await API.delete(`/api/reviews/${id}`);
+    } catch (err) {
+      console.warn("Could not delete from SQLite API:", err);
+    }
+
+    const updated = history.filter((item) => item.id !== id);
+    setHistory(updated);
+    localStorage.setItem("codeReviewHistory", JSON.stringify(updated));
+  };
+
+  const handleDeleteFile = async (id: string) => {
+    if (!window.confirm("Delete this file record?")) return;
+    try {
+      await API.delete(`/api/files/${id}`);
+      setFiles((prev) => prev.filter((f) => f.id !== id));
+    } catch (err) {
+      console.warn("Could not delete file:", err);
     }
   };
 
-  useEffect(() => {
-    loadHistory();
-
-    const handleStorageChange = () => {
-      loadHistory();
-    };
-
-    window.addEventListener(
-      "storage",
-      handleStorageChange
-    );
-
-    const interval = window.setInterval(
-      loadHistory,
-      1000
-    );
-
-    return () => {
-      window.removeEventListener(
-        "storage",
-        handleStorageChange
-      );
-
-      window.clearInterval(interval);
-    };
-  }, []);
-
-  /* ==========================================================
-     CALCULATE STATISTICS
-     ========================================================== */
-
-  const statistics = useMemo(() => {
+  // Real statistics derived purely from actual live data
+  const stats = useMemo(() => {
     const totalReviews = history.length;
-
-    const bugs = history.reduce(
-      (total, item) =>
-        total + (item.bugs || 0),
-      0
-    );
-
-    const security = history.reduce(
-      (total, item) =>
-        total + (item.security || 0),
-      0
-    );
-
-    const performance = history.reduce(
-      (total, item) =>
-        total + (item.performance || 0),
-      0
-    );
-
-    const quality = history.reduce(
-      (total, item) =>
-        total + (item.quality || 0),
-      0
-    );
-
-    const totalIssues = history.reduce(
-      (total, item) =>
-        total + (item.issueCount || 0),
-      0
-    );
-
-    const scoredReviews = history.filter(
-      (item) =>
-        typeof item.score === "number"
-    );
-
-    const averageScore =
-      scoredReviews.length > 0
-        ? scoredReviews.reduce(
-            (total, item) =>
-              total + (item.score || 0),
-            0
-          ) / scoredReviews.length
-        : null;
-
-    const averageConfidence =
-      totalReviews > 0
-        ? history.reduce(
-            (total, item) =>
-              total + (item.confidence || 0),
-            0
-          ) / totalReviews
-        : 0;
+    const totalFiles = files.length;
+    const totalIssues = history.reduce((sum, r) => sum + (r.issueCount || 0), 0);
+    const validScores = history.filter((r) => r.score !== null).map((r) => r.score as number);
+    const avgScore = validScores.length > 0 ? Math.round(validScores.reduce((a, b) => a + b, 0) / validScores.length) : null;
 
     return {
       totalReviews,
-      bugs,
-      security,
-      performance,
-      quality,
+      totalFiles,
       totalIssues,
-      averageScore,
-      averageConfidence,
+      avgScore,
     };
-  }, [history]);
+  }, [history, files]);
 
-  /* ==========================================================
-     RECENT REVIEWS
-     ========================================================== */
+  const filteredReviews = useMemo(() => {
+    if (!searchQuery.trim()) return history;
+    const q = searchQuery.toLowerCase();
+    return history.filter(
+      (r) =>
+        r.projectName.toLowerCase().includes(q) ||
+        r.question.toLowerCase().includes(q) ||
+        r.language.toLowerCase().includes(q)
+    );
+  }, [history, searchQuery]);
 
-  const recentReviews =
-    history.slice(0, 5);
+  const formatFileSize = (bytes: number) => {
+    if (bytes < 1024) return bytes + " B";
+    if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + " KB";
+    return (bytes / 1024 / 1024).toFixed(2) + " MB";
+  };
 
-  /* ==========================================================
-     FORMAT DATE
-     ========================================================== */
-
-  const formatDate = (
-    dateString: string
-  ) => {
+  const formatDate = (iso: string) => {
     try {
-      return new Intl.DateTimeFormat(
-        "en-IN",
-        {
-          day: "2-digit",
-          month: "short",
-          year: "numeric",
-          hour: "2-digit",
-          minute: "2-digit",
-        }
-      ).format(
-        new Date(dateString)
-      );
+      return new Date(iso).toLocaleDateString(undefined, {
+        year: "numeric",
+        month: "short",
+        day: "numeric",
+        hour: "2-digit",
+        minute: "2-digit",
+      });
     } catch {
-      return "Unknown date";
+      return iso;
     }
   };
 
-  /* ==========================================================
-     RENDER
-     ========================================================== */
-
   return (
-    <main className="dashboard-page-modern">
-      <div className="container">
+    <main className="dashboard-container">
+      <div className="dashboard-header">
+        <div>
+          <h1>Workspace Dashboard</h1>
+          <p style={{ color: "var(--text-secondary)", marginTop: "4px" }}>
+            Welcome back{user?.fullName ? `, ${user.fullName}` : ""}. Track your audits, files, and health scores.
+          </p>
+        </div>
 
-        {/* ==================================================
-            HEADER
-        ================================================== */}
-
-        <section className="dashboard-header">
-
-          <div>
-            <div className="section-label">
-              PROJECT OVERVIEW
-            </div>
-
-            <h1>
-              Review Dashboard
-            </h1>
-
-            <p>
-              Monitor your AI-powered code analysis
-              activity and project health.
-            </p>
-          </div>
-
-          <button
-            className="dashboard-review-button"
-            onClick={() =>
-              navigate("/review")
-            }
-          >
-            <span>✦</span>
-            New Review
-            <span>→</span>
+        <div style={{ display: "flex", gap: "10px" }}>
+          <button className="btn-secondary" onClick={() => navigate("/configuration")}>
+            ⚙️ Configuration
           </button>
-
-        </section>
-
-
-        {/* ==================================================
-            STATISTICS
-        ================================================== */}
-
-        <section className="dashboard-stats">
-
-          {/* Reviews */}
-
-          <article className="dashboard-stat-card">
-
-            <div className="stat-card-top">
-
-              <span>
-                TOTAL REVIEWS
-              </span>
-
-              <div className="stat-icon purple">
-                ◈
-              </div>
-
-            </div>
-
-            <strong>
-              {statistics.totalReviews}
-            </strong>
-
-            <small>
-              projects analyzed
-            </small>
-
-          </article>
-
-
-          {/* Bugs */}
-
-          <article className="dashboard-stat-card">
-
-            <div className="stat-card-top">
-
-              <span>
-                BUGS FOUND
-              </span>
-
-              <div className="stat-icon red">
-                !
-              </div>
-
-            </div>
-
-            <strong className="red-value">
-              {statistics.bugs}
-            </strong>
-
-            <small>
-              runtime issues detected
-            </small>
-
-          </article>
-
-
-          {/* Security */}
-
-          <article className="dashboard-stat-card">
-
-            <div className="stat-card-top">
-
-              <span>
-                SECURITY
-              </span>
-
-              <div className="stat-icon yellow">
-                ◇
-              </div>
-
-            </div>
-
-            <strong className="yellow-value">
-              {statistics.security}
-            </strong>
-
-            <small>
-              security findings
-            </small>
-
-          </article>
-
-
-          {/* Confidence */}
-
-          <article className="dashboard-stat-card">
-
-            <div className="stat-card-top">
-
-              <span>
-                AI CONFIDENCE
-              </span>
-
-              <div className="stat-icon green">
-                ✓
-              </div>
-
-            </div>
-
-            <strong className="green-value">
-              {statistics.totalReviews > 0
-                ? `${Math.round(
-                    statistics.averageConfidence
-                  )}%`
-                : "—"}
-            </strong>
-
-            <small>
-              average analysis confidence
-            </small>
-
-          </article>
-
-        </section>
-
-
-        {/* ==================================================
-            SECONDARY STATISTICS
-        ================================================== */}
-
-        <section className="dashboard-secondary">
-
-          <div className="dashboard-secondary-card">
-
-            <span>
-              TOTAL ISSUES
-            </span>
-
-            <strong>
-              {statistics.totalIssues}
-            </strong>
-
-            <p>
-              Across all completed reviews
-            </p>
-
-          </div>
-
-
-          <div className="dashboard-secondary-card">
-
-            <span>
-              PERFORMANCE
-            </span>
-
-            <strong>
-              {statistics.performance}
-            </strong>
-
-            <p>
-              Performance findings
-            </p>
-
-          </div>
-
-
-          <div className="dashboard-secondary-card">
-
-            <span>
-              CODE QUALITY
-            </span>
-
-            <strong>
-              {statistics.quality}
-            </strong>
-
-            <p>
-              Quality observations and suggestions
-            </p>
-
-          </div>
-
-
-          <div className="dashboard-secondary-card">
-
-            <span>
-              AVERAGE SCORE
-            </span>
-
-            <strong>
-              {statistics.averageScore !== null
-                ? `${statistics.averageScore.toFixed(
-                    1
-                  )}/10`
-                : "—"}
-            </strong>
-
-            <p>
-              From scored reviews
-            </p>
-
-          </div>
-
-        </section>
-
-
-        {/* ==================================================
-            RECENT ACTIVITY
-        ================================================== */}
-
-        <section className="dashboard-activity">
-
-          <div className="dashboard-section-header">
-
-            <div>
-              <span className="section-label">
-                RECENT ACTIVITY
-              </span>
-
-              <h2>
-                Latest code reviews
-              </h2>
-            </div>
-
-            <button
-              onClick={() =>
-                navigate("/history")
-              }
-            >
-              View all →
-            </button>
-
-          </div>
-
-
-          {recentReviews.length === 0 ? (
-
-            <div className="dashboard-empty">
-
-              <div className="dashboard-empty-icon">
-                ◈
-              </div>
-
-              <h3>
-                No reviews yet
-              </h3>
-
-              <p>
-                Complete your first AI code review
-                to see project activity here.
-              </p>
-
-              <button
-                onClick={() =>
-                  navigate("/review")
-                }
-              >
-                Start your first review →
-              </button>
-
-            </div>
-
-          ) : (
-
-            <div className="dashboard-review-list">
-
-              {recentReviews.map(
-                (item) => (
-
-                  <article
-                    className="dashboard-review-row"
-                    key={item.id}
-                  >
-
-                    <div className="dashboard-project-icon">
-                      {item.language
-                        ?.charAt(0)
-                        .toUpperCase() || "C"}
-                    </div>
-
-
-                    <div className="dashboard-project-info">
-
-                      <strong>
-                        {item.projectName}
-                      </strong>
-
-                      <span>
-                        {item.language}
-                        {" • "}
-                        {formatDate(
-                          item.createdAt
-                        )}
-                      </span>
-
-                    </div>
-
-
-                    <div className="dashboard-issue-summary">
-
-                      <span className="dashboard-bug-count">
-                        {item.bugs || 0} bugs
-                      </span>
-
-                      <span className="dashboard-security-count">
-                        {item.security || 0} security
-                      </span>
-
-                    </div>
-
-
-                    <div className="dashboard-confidence">
-
-                      <span>
-                        {item.confidence || 0}%
-                      </span>
-
-                      <small>
-                        confidence
-                      </small>
-
-                    </div>
-
-
-                    <button
-                      className="dashboard-row-arrow"
-                      onClick={() =>
-                        navigate("/history")
-                      }
-                    >
-                      →
-                    </button>
-
-                  </article>
-
-                )
-              )}
-
-            </div>
-
-          )}
-
-        </section>
-
-
-        {/* ==================================================
-            ANALYSIS BREAKDOWN
-        ================================================== */}
-
-        {statistics.totalReviews > 0 && (
-
-          <section className="dashboard-breakdown">
-
-            <div className="dashboard-section-header">
-
-              <div>
-                <span className="section-label">
-                  ANALYSIS BREAKDOWN
-                </span>
-
-                <h2>
-                  What the AI is finding
-                </h2>
-              </div>
-
-            </div>
-
-
-            <div className="breakdown-grid">
-
-              <div className="breakdown-item">
-
-                <div className="breakdown-heading">
-
-                  <span>
-                    Bugs
-                  </span>
-
-                  <strong>
-                    {statistics.bugs}
-                  </strong>
-
-                </div>
-
-                <div className="breakdown-bar">
-
-                  <span
-                    className="bugs-bar"
-                    style={{
-                      width: `${
-                        statistics.totalIssues > 0
-                          ? Math.min(
-                              100,
-                              (statistics.bugs /
-                                statistics.totalIssues) *
-                                100
-                            )
-                          : 0
-                      }%`,
-                    }}
-                  />
-
-                </div>
-
-              </div>
-
-
-              <div className="breakdown-item">
-
-                <div className="breakdown-heading">
-
-                  <span>
-                    Security
-                  </span>
-
-                  <strong>
-                    {statistics.security}
-                  </strong>
-
-                </div>
-
-                <div className="breakdown-bar">
-
-                  <span
-                    className="security-bar"
-                    style={{
-                      width: `${
-                        statistics.totalIssues > 0
-                          ? Math.min(
-                              100,
-                              (statistics.security /
-                                statistics.totalIssues) *
-                                100
-                            )
-                          : 0
-                      }%`,
-                    }}
-                  />
-
-                </div>
-
-              </div>
-
-
-              <div className="breakdown-item">
-
-                <div className="breakdown-heading">
-
-                  <span>
-                    Performance
-                  </span>
-
-                  <strong>
-                    {statistics.performance}
-                  </strong>
-
-                </div>
-
-                <div className="breakdown-bar">
-
-                  <span
-                    className="performance-bar"
-                    style={{
-                      width: `${
-                        statistics.totalIssues > 0
-                          ? Math.min(
-                              100,
-                              (statistics.performance /
-                                statistics.totalIssues) *
-                                100
-                            )
-                          : 0
-                      }%`,
-                    }}
-                  />
-
-                </div>
-
-              </div>
-
-
-              <div className="breakdown-item">
-
-                <div className="breakdown-heading">
-
-                  <span>
-                    Code Quality
-                  </span>
-
-                  <strong>
-                    {statistics.quality}
-                  </strong>
-
-                </div>
-
-                <div className="breakdown-bar">
-
-                  <span
-                    className="quality-bar"
-                    style={{
-                      width: `${
-                        statistics.totalIssues > 0
-                          ? Math.min(
-                              100,
-                              (statistics.quality /
-                                statistics.totalIssues) *
-                                100
-                            )
-                          : 0
-                      }%`,
-                    }}
-                  />
-
-                </div>
-
-              </div>
-
-            </div>
-
-          </section>
-
-        )}
-
+          <button className="btn-primary" onClick={() => navigate("/review")}>
+            + Run New Review
+          </button>
+        </div>
       </div>
+
+      {/* REAL DATA STATS CARDS */}
+      <div className="dashboard-stats-grid">
+        <div className="stat-card">
+          <div className="stat-num">{stats.totalReviews}</div>
+          <div className="stat-label">Total Completed Reviews</div>
+        </div>
+
+        <div className="stat-card">
+          <div className="stat-num">{stats.totalIssues}</div>
+          <div className="stat-label">Detected Issues Flagged</div>
+        </div>
+
+        <div className="stat-card">
+          <div className="stat-num">
+            {stats.avgScore !== null ? `${stats.avgScore}/100` : "—"}
+          </div>
+          <div className="stat-label">Average Code Health Score</div>
+        </div>
+
+        <div className="stat-card">
+          <div className="stat-num">{stats.totalFiles}</div>
+          <div className="stat-label">Indexed Files Tracked</div>
+        </div>
+      </div>
+
+      {/* DASHBOARD TABS */}
+      <div className="dashboard-tabs">
+        <button
+          type="button"
+          className={`dash-tab-btn ${activeTab === "overview" ? "active" : ""}`}
+          onClick={() => setActiveTab("overview")}
+        >
+          📊 Activity Overview
+        </button>
+        <button
+          type="button"
+          className={`dash-tab-btn ${activeTab === "reviews" ? "active" : ""}`}
+          onClick={() => setActiveTab("reviews")}
+        >
+          📝 Past Reviews ({history.length})
+        </button>
+        <button
+          type="button"
+          className={`dash-tab-btn ${activeTab === "files" ? "active" : ""}`}
+          onClick={() => setActiveTab("files")}
+        >
+          📁 Uploaded Files ({files.length})
+        </button>
+      </div>
+
+      {/* TAB 1: OVERVIEW */}
+      {activeTab === "overview" && (
+        <div>
+          {history.length === 0 ? (
+            <div className="empty-state">
+              <div className="empty-icon">🚀</div>
+              <h3>No Reviews Executed Yet</h3>
+              <p>Upload a project ZIP, source files, or connect your GitHub repository to generate your first audit.</p>
+              <button className="btn-primary" onClick={() => navigate("/")}>
+                Upload Project Now →
+              </button>
+            </div>
+          ) : (
+            <div>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "16px" }}>
+                <h3 style={{ fontSize: "18px" }}>Recent Review Activity</h3>
+                <button className="btn-secondary" onClick={() => setActiveTab("reviews")}>
+                  View All ({history.length}) →
+                </button>
+              </div>
+
+              <div style={{ display: "flex", flexDirection: "column", gap: "14px" }}>
+                {history.slice(0, 5).map((rev) => (
+                  <div
+                    key={rev.id}
+                    className="capability-card"
+                    style={{ cursor: "pointer", justifyContent: "space-between", alignItems: "center" }}
+                    onClick={() => setSelectedReview(rev)}
+                  >
+                    <div>
+                      <strong style={{ fontSize: "16px", color: "var(--text-primary)" }}>{rev.projectName}</strong>
+                      <div style={{ fontSize: "13px", color: "var(--text-muted)", marginTop: "4px" }}>
+                        {rev.language} • {rev.issueCount} issues • {formatDate(rev.createdAt)}
+                      </div>
+                    </div>
+
+                    <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
+                      {rev.score !== null && (
+                        <span
+                          className="meta-badge"
+                          style={{
+                            fontSize: "14px",
+                            fontWeight: 700,
+                            backgroundColor: rev.score >= 80 ? "var(--success-bg)" : rev.score >= 60 ? "var(--warning-bg)" : "var(--danger-bg)",
+                            color: rev.score >= 80 ? "var(--success)" : rev.score >= 60 ? "var(--warning)" : "var(--danger)",
+                            border: `1px solid ${rev.score >= 80 ? "rgba(16, 185, 129, 0.3)" : rev.score >= 60 ? "rgba(245, 158, 11, 0.3)" : "rgba(239, 68, 68, 0.3)"}`
+                          }}
+                        >
+                          Score: {rev.score}/100
+                        </span>
+                      )}
+                      <button
+                        type="button"
+                        className="btn-secondary"
+                        style={{ padding: "6px 12px", fontSize: "13px" }}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setSelectedReview(rev);
+                        }}
+                      >
+                        Inspect
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* TAB 2: REVIEWS */}
+      {activeTab === "reviews" && (
+        <div>
+          <div style={{ marginBottom: "18px" }}>
+            <input
+              type="text"
+              placeholder="Search reviews by project, question, or language..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              style={{ width: "100%", maxWidth: "400px" }}
+            />
+          </div>
+
+          {filteredReviews.length === 0 ? (
+            <div className="empty-state">
+              <div className="empty-icon">🔍</div>
+              <h3>No Reviews Found</h3>
+              <p>No past reviews match your query.</p>
+            </div>
+          ) : (
+            <div style={{ display: "flex", flexDirection: "column", gap: "14px" }}>
+              {filteredReviews.map((rev) => (
+                <div
+                  key={rev.id}
+                  className="capability-card"
+                  style={{ cursor: "pointer", justifyContent: "space-between", alignItems: "center" }}
+                  onClick={() => setSelectedReview(rev)}
+                >
+                  <div style={{ flex: 1 }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "4px" }}>
+                      <strong style={{ fontSize: "17px", color: "var(--text-primary)" }}>{rev.projectName}</strong>
+                      <span className="meta-badge">{rev.language}</span>
+                      {rev.score !== null && (
+                        <span className="meta-badge" style={{ backgroundColor: "var(--success-bg)", color: "var(--success)" }}>
+                          Score: {rev.score}/100
+                        </span>
+                      )}
+                    </div>
+                    <div style={{ fontSize: "14px", color: "var(--text-secondary)" }}>
+                      Query: "{rev.question}"
+                    </div>
+                    <div style={{ fontSize: "12.5px", color: "var(--text-muted)", marginTop: "4px" }}>
+                      {formatDate(rev.createdAt)} • {rev.bugs} Bugs • {rev.security} Security • {rev.performance} Perf • {rev.quality} Quality
+                    </div>
+                  </div>
+
+                  <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                    <button
+                      type="button"
+                      className="btn-secondary"
+                      style={{ padding: "6px 14px", fontSize: "13px" }}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setSelectedReview(rev);
+                      }}
+                    >
+                      View Report
+                    </button>
+                    <button
+                      type="button"
+                      className="btn-secondary"
+                      style={{ padding: "6px 10px", fontSize: "13px", color: "var(--danger)" }}
+                      onClick={(e) => handleDeleteReview(rev.id, e)}
+                    >
+                      Delete
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* TAB 3: FILES */}
+      {activeTab === "files" && (
+        <div>
+          {files.length === 0 ? (
+            <div className="empty-state">
+              <div className="empty-icon">📁</div>
+              <h3>No Files Tracked</h3>
+              <p>Uploaded archives and scripts will appear here.</p>
+              <button className="btn-primary" onClick={() => navigate("/")}>
+                Upload Code →
+              </button>
+            </div>
+          ) : (
+            <div className="files-table-wrapper">
+              <table className="files-table">
+                <thead>
+                  <tr>
+                    <th>File Name</th>
+                    <th>Type</th>
+                    <th>Size</th>
+                    <th>Uploaded Date</th>
+                    <th>Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {files.map((file) => (
+                    <tr key={file.id}>
+                      <td>
+                        <strong>{file.file_name}</strong>
+                      </td>
+                      <td>
+                        <span className="meta-badge">{file.file_type || "code"}</span>
+                      </td>
+                      <td>{formatFileSize(file.file_size)}</td>
+                      <td>{formatDate(file.upload_time)}</td>
+                      <td>
+                        <div style={{ display: "flex", gap: "8px" }}>
+                          <button
+                            type="button"
+                            className="btn-secondary"
+                            style={{ padding: "4px 10px", fontSize: "12px" }}
+                            onClick={() => navigate("/review")}
+                          >
+                            Analyze
+                          </button>
+                          <button
+                            type="button"
+                            className="btn-secondary"
+                            style={{ padding: "4px 10px", fontSize: "12px", color: "var(--danger)" }}
+                            onClick={() => handleDeleteFile(file.id)}
+                          >
+                            Delete
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* INSPECT REVIEW MODAL */}
+      {selectedReview && (
+        <ReviewModal
+          reviewData={selectedReview}
+          onClose={() => setSelectedReview(null)}
+        />
+      )}
     </main>
   );
 }

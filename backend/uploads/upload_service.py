@@ -50,7 +50,7 @@ class UploadService:
             upload_dir
         )
 
-        # Shared RAG Pipeline
+        # Per-user RAG pipeline supplied by the application runtime.
         self.rag_pipeline = rag_pipeline
 
     # ============================================================
@@ -106,6 +106,8 @@ class UploadService:
             "project_name": (
                 upload_result["project_name"]
             ),
+            "project_folder": str(upload_result["project_folder"]),
+            "files": upload_result.get("files", []),
             "file_count": file_count,
             "languages": languages,
             "metadata": metadata
@@ -160,6 +162,7 @@ class UploadService:
                 f"uploaded and indexed successfully."
             ),
             "project_name": "uploaded_files",
+            "project_folder": str(upload_result["project_folder"]),
             "file_count": len(saved_files),
             "files": saved_files,
             "languages": languages,
@@ -199,6 +202,7 @@ class UploadService:
                 "successfully."
             ),
             "project_name": "pasted_code",
+            "project_folder": str(upload_result["project_folder"]),
             "file": (
                 upload_result["file_name"]
             ),
@@ -238,6 +242,7 @@ class UploadService:
                 f"{upload_result['page_count']} pages."
             ),
             "project_name": "pdf_project",
+            "project_folder": str(upload_result["project_folder"]),
             "file": upload_result["file_name"],
             "page_count": (
                 upload_result["page_count"]
@@ -339,6 +344,7 @@ class UploadService:
                 f"characters."
             ),
             "project_name": "doc_project",
+            "project_folder": str(upload_result["project_folder"]),
             "file": upload_result["file_name"],
             "metadata": metadata
         }

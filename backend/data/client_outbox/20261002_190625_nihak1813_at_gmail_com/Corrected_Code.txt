@@ -1,0 +1,21 @@
+# ============================================================
+# File: corrected_rockpaper.py
+# ============================================================
+# ============================================================
+# Refactored Code with Applied Fixes: rockpaper.py
+# ============================================================
+
+# Fix for: Use of global variables (Severity: LOW)
+def main():
+    player_score = 0
+    computer_score = 0
+    current_round = 1
+    # rest of loop
+
+
+# Fix for: Add input validation for round count (Severity: LOW)
+if total_rounds <= 0:
+    print("Please enter a number greater than 0.")
+    continue
+else:
+    break

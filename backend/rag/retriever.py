@@ -72,7 +72,7 @@ class Retriever:
         # --------------------------------------------------------
 
         print(
-            "Loading embedding model..."
+            "Preparing embedding model..."
         )
 
         self.embedder = CodeEmbedder(
@@ -608,13 +608,7 @@ class Retriever:
         # Query embedding
         # --------------------------------------------------------
 
-        query_embedding = (
-            self.embedder.model.encode(
-                query,
-                convert_to_numpy=True,
-                normalize_embeddings=True,
-            )
-        )
+        query_embedding = self.embedder.embed_text(query)
 
         # --------------------------------------------------------
         # Search more candidates than required

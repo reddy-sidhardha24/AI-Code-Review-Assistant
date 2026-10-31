@@ -1,41 +1,20 @@
 {
-    "project_name": "accuracytest.1",
-    "total_files": 4,
-    "total_lines": 55,
+    "project_name": "temp_project",
+    "total_files": 1,
+    "total_lines": 44,
     "languages": {
         "Python": {
-            "files": 4,
-            "lines": 55
+            "files": 1,
+            "lines": 44
         }
     },
     "files": [
         {
-            "name": "calculator.py",
-            "path": "calculator.py",
+            "name": "rockpaper.py",
+            "path": "rockpaper.py",
             "extension": ".py",
             "language": "Python",
-            "lines": 12
-        },
-        {
-            "name": "database.py",
-            "path": "database.py",
-            "extension": ".py",
-            "language": "Python",
-            "lines": 7
-        },
-        {
-            "name": "main.py",
-            "path": "main.py",
-            "extension": ".py",
-            "language": "Python",
-            "lines": 23
-        },
-        {
-            "name": "security.py",
-            "path": "security.py",
-            "extension": ".py",
-            "language": "Python",
-            "lines": 13
+            "lines": 44
         }
     ]
 }

@@ -1,23 +1,22 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import API from "../api";
+import ReviewModal from "../components/ReviewModal";
 
-interface HistoryReview {
+export interface HistoryReview {
   id: string;
   projectName: string;
   language: string;
   question: string;
-
   issueCount: number;
-
   bugs: number;
   security: number;
   performance: number;
   quality: number;
-
   score: number | null;
   confidence: number;
-
   createdAt: string;
+  review?: any;
 }
 
 type FilterType =
@@ -30,48 +29,57 @@ type FilterType =
 function History() {
   const navigate = useNavigate();
 
-  const [history, setHistory] = useState<
-    HistoryReview[]
-  >([]);
-
+  const [history, setHistory] = useState<HistoryReview[]>([]);
   const [search, setSearch] = useState("");
-
-  const [filter, setFilter] =
-    useState<FilterType>("all");
-
-  const [selectedReview, setSelectedReview] =
-    useState<HistoryReview | null>(null);
+  const [filter, setFilter] = useState<FilterType>("all");
+  const [selectedReview, setSelectedReview] = useState<HistoryReview | null>(null);
 
   /* ==========================================================
-     LOAD HISTORY
+     LOAD HISTORY FROM SQLITE (with localStorage fallback)
      ========================================================== */
 
-  const loadHistory = () => {
+  const loadHistory = async () => {
+    let dbReviews: HistoryReview[] = [];
     try {
-      const stored =
-        localStorage.getItem(
-          "codeReviewHistory"
-        );
-
-      if (!stored) {
-        setHistory([]);
-        return;
+      const res = await API.get("/api/reviews");
+      if (res.data?.success && Array.isArray(res.data.reviews)) {
+        dbReviews = res.data.reviews.map((r: any) => ({
+          id: r.id,
+          projectName: r.project_name || "Code Review",
+          language: r.language || "Multi-language",
+          question: r.question,
+          issueCount: r.issue_count ?? 0,
+          bugs: r.bugs_count ?? 0,
+          security: r.security_count ?? 0,
+          performance: r.performance_count ?? 0,
+          quality: r.quality_count ?? 0,
+          score: r.score ?? null,
+          confidence: r.confidence ?? 90,
+          createdAt: r.created_at,
+          review: r.review || {}
+        }));
       }
+    } catch (e) {
+      // offline fallback
+    }
 
-      const parsed = JSON.parse(stored);
-
-      if (Array.isArray(parsed)) {
-        setHistory(parsed);
-      } else {
-        setHistory([]);
+    try {
+      const stored = localStorage.getItem("codeReviewHistory");
+      const local: HistoryReview[] = stored ? JSON.parse(stored) : [];
+      const map = new Map<string, HistoryReview>();
+      dbReviews.forEach((item) => map.set(item.id, item));
+      if (Array.isArray(local)) {
+        local.forEach((item) => {
+          if (!map.has(item.id)) map.set(item.id, item);
+        });
       }
-    } catch (error) {
-      console.error(
-        "Unable to load review history:",
-        error
+      setHistory(
+        Array.from(map.values()).sort(
+          (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+        )
       );
-
-      setHistory([]);
+    } catch (error) {
+      setHistory(dbReviews);
     }
   };
 
@@ -82,23 +90,9 @@ function History() {
       loadHistory();
     };
 
-    window.addEventListener(
-      "storage",
-      handleStorageChange
-    );
-
-    const interval = window.setInterval(
-      loadHistory,
-      1000
-    );
-
+    window.addEventListener("storage", handleStorageChange);
     return () => {
-      window.removeEventListener(
-        "storage",
-        handleStorageChange
-      );
-
-      window.clearInterval(interval);
+      window.removeEventListener("storage", handleStorageChange);
     };
   }, []);
 
@@ -161,7 +155,7 @@ function History() {
      DELETE ONE REVIEW
      ========================================================== */
 
-  const deleteReview = (
+  const deleteReview = async (
     id: string
   ) => {
     const confirmed = window.confirm(
@@ -170,6 +164,12 @@ function History() {
 
     if (!confirmed) {
       return;
+    }
+
+    try {
+      await API.delete(`/api/reviews/${id}`).catch(() => {});
+    } catch (e) {
+      // ignore
     }
 
     const updated = history.filter(
@@ -194,17 +194,23 @@ function History() {
      CLEAR HISTORY
      ========================================================== */
 
-  const clearHistory = () => {
+  const clearHistory = async () => {
     if (history.length === 0) {
       return;
     }
 
     const confirmed = window.confirm(
-      "This will permanently remove all review history from this browser. Continue?"
+      "This will permanently remove all review history. Continue?"
     );
 
     if (!confirmed) {
       return;
+    }
+
+    try {
+      await API.delete("/api/reviews").catch(() => {});
+    } catch (e) {
+      // ignore
     }
 
     localStorage.removeItem(
@@ -729,145 +735,10 @@ function History() {
             ================================================== */}
 
         {selectedReview && (
-
-          <div
-            className="history-modal-overlay"
-            onClick={() =>
-              setSelectedReview(null)
-            }
-          >
-
-            <div
-              className="history-modal"
-              onClick={(e) =>
-                e.stopPropagation()
-              }
-            >
-
-              <div className="history-modal-header">
-
-                <div>
-
-                  <span className="section-label">
-                    REVIEW DETAILS
-                  </span>
-
-                  <h2>
-                    {selectedReview.projectName}
-                  </h2>
-
-                </div>
-
-                <button
-                  className="history-modal-close"
-                  onClick={() =>
-                    setSelectedReview(null)
-                  }
-                >
-                  ×
-                </button>
-
-              </div>
-
-
-              <div className="history-modal-meta">
-
-                <span>
-                  {selectedReview.language}
-                </span>
-
-                <span>
-                  {formatDate(
-                    selectedReview.createdAt
-                  )}
-                </span>
-
-                <span>
-                  {selectedReview.confidence}%
-                  confidence
-                </span>
-
-              </div>
-
-
-              <div className="history-modal-question">
-
-                <span>
-                  REVIEW QUESTION
-                </span>
-
-                <p>
-                  {selectedReview.question}
-                </p>
-
-              </div>
-
-
-              <div className="history-modal-stats">
-
-                <div>
-                  <strong className="history-red">
-                    {selectedReview.bugs || 0}
-                  </strong>
-
-                  <span>
-                    Bugs
-                  </span>
-                </div>
-
-
-                <div>
-                  <strong className="history-yellow">
-                    {selectedReview.security || 0}
-                  </strong>
-
-                  <span>
-                    Security
-                  </span>
-                </div>
-
-
-                <div>
-                  <strong className="history-blue">
-                    {selectedReview.performance || 0}
-                  </strong>
-
-                  <span>
-                    Performance
-                  </span>
-                </div>
-
-
-                <div>
-                  <strong className="history-purple">
-                    {selectedReview.quality || 0}
-                  </strong>
-
-                  <span>
-                    Quality
-                  </span>
-                </div>
-
-              </div>
-
-
-              <div className="history-modal-footer">
-
-                <button
-                  onClick={() => {
-                    setSelectedReview(null);
-                    navigate("/review");
-                  }}
-                >
-                  Run another review →
-                </button>
-
-              </div>
-
-            </div>
-
-          </div>
-
+          <ReviewModal
+            reviewData={selectedReview}
+            onClose={() => setSelectedReview(null)}
+          />
         )}
 
       </div>
