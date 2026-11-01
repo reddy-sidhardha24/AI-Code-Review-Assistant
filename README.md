@@ -30,7 +30,6 @@
 - [Project Structure](#-project-structure)
 - [Installation and Setup](#-installation-and-setup)
 - [Environment Configuration](#-environment-configuration)
-- [Example Review](#-example-review)
 - [Advantages](#-advantages)
 - [Limitations](#-limitations)
 - [Future Enhancements](#-future-enhancements)
@@ -666,52 +665,6 @@ APP_ENV=development
 Additional GitHub and model configuration variables may be required depending on the implementation.
 
 **Never upload your actual `.env` file to GitHub.**
-
----
-
-## 📊 Example Review
-
-### Sample Project
-
-| Property | Value |
-|---|---|
-| Project Name | `javatest1` |
-| Programming Language | Java |
-| Project Health Score | 75 / 100 |
-| Detected Issue | Division by Zero |
-| Severity | Critical |
-| Affected Method | `calculateAverage()` |
-
-### Problem
-
-The method attempts to calculate the average of an empty integer array. When the array length is zero, the division operation throws an `ArithmeticException`.
-
-### Suggested Correction
-
-```java
-public static double calculateAverage(int[] numbers) {
-    if (numbers == null || numbers.length == 0) {
-        return 0;
-    }
-
-    int sum = 0;
-
-    for (int number : numbers) {
-        sum += number;
-    }
-
-    return (double) sum / numbers.length;
-}
-```
-
-### Expected Review Result
-
-- Identify the division-by-zero issue.
-- Explain the cause of the exception.
-- Recommend input validation.
-- Generate corrected code.
-- Display the proposed fix in the diff interface.
-- Include the finding in the generated review report.
 
 ---
 
